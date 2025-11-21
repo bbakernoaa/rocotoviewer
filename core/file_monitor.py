@@ -17,160 +17,6 @@ from collections import defaultdict
 from ..utils.file_utils import FileUtils
 
 
-class LogFileTailer:
-    """
-    Tail log files in real-time, similar to 'tail -f'.
-    """
-    
-    def __init__(self, file_path: Path, callback: Callable[[str], None], 
-                 buffer_size: int = 4096, max_buffer_lines: int = 1000):
-        """
-        Initialize the log file tailer.
-        
-        Args:
-            file_path: Path to the log file to tail
-            callback: Function to call when new lines are available
-            buffer_size: Size of buffer to read at a time
-            max_buffer_lines: Maximum lines to keep in buffer
-        """
-        self.file_path = file_path
-        self.callback = callback
-        self.buffer_size = buffer_size
-        self.max_buffer_lines = max_buffer_lines
-        self.logger = logging.getLogger(__name__)
-        
-        # Track file position
-        self.position = 0
-        self.file_handle = None
-        self.running = False
-        self.thread = None
-        
-        # Track file rotation
-        self.inode = None
-        self.size = 0
-        
-    def start(self):
-        """Start tailing the log file."""
-        if self.running:
-            return
-            
-        # Get initial file position
-        if self.file_path.exists():
-            try:
-                self.file_handle = open(self.file_path, 'r', encoding='utf-8', errors='ignore')
-                # Go to end of file
-                self.file_handle.seek(0, os.SEEK_END)
-                self.position = self.file_handle.tell()
-                self.inode = os.stat(self.file_path).st_ino
-                self.size = os.stat(self.file_path).st_size
-            except Exception as e:
-                self.logger.error(f"Error opening file {self.file_path}: {str(e)}")
-                return
-        
-        self.running = True
-        self.thread = threading.Thread(target=self._tail_loop, daemon=True)
-        self.thread.start()
-        
-        self.logger.info(f"Started tailing log file: {self.file_path}")
-    
-    def stop(self):
-        """Stop tailing the log file."""
-        self.running = False
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=2)
-        
-        if self.file_handle:
-            self.file_handle.close()
-            self.file_handle = None
-            
-        self.logger.info(f"Stopped tailing log file: {self.file_path}")
-    
-    def _tail_loop(self):
-        """Main tailing loop."""
-        while self.running:
-            try:
-                self._check_for_updates()
-                time.sleep(0.1)  # Small delay to prevent busy waiting
-            except Exception as e:
-                self.logger.error(f"Error in tail loop for {self.file_path}: {str(e)}")
-                time.sleep(1)  # Brief pause before retrying
-    
-    def _check_for_updates(self):
-        """Check for new content in the log file."""
-        if not self.file_path.exists():
-            # File doesn't exist, check if it was rotated
-            if self.file_handle:
-                self.file_handle.close()
-                self.file_handle = None
-            return
-        
-        try:
-            # Check if file was rotated (different inode or smaller size)
-            current_inode = os.stat(self.file_path).st_ino
-            current_size = os.stat(self.file_path).st_size
-            
-            # Handle file rotation
-            if (self.inode is not None and 
-                (current_inode != self.inode or current_size < self.size)):
-                self.logger.info(f"File rotation detected for {self.file_path}")
-                if self.file_handle:
-                    self.file_handle.close()
-                self.file_handle = open(self.file_path, 'r', encoding='utf-8', errors='ignore')
-                self.position = 0  # Start from beginning of new file
-                self.inode = current_inode
-                self.size = current_size
-            
-            # Check if file handle is None and try to open
-            if self.file_handle is None:
-                self.file_handle = open(self.file_path, 'r', encoding='utf-8', errors='ignore')
-                self.file_handle.seek(0, os.SEEK_END)
-                self.position = self.file_handle.tell()
-                self.inode = os.stat(self.file_path).st_ino
-                self.size = current_size
-            
-            # Get current file size
-            current_pos = self.file_handle.tell()
-            file_size = os.path.getsize(self.file_path)
-            
-            # Check if file has grown
-            if file_size > current_pos:
-                # Read new content
-                self.file_handle.seek(current_pos)
-                new_content = self.file_handle.read(file_size - current_pos)
-                
-                if new_content:
-                    # Split into lines and send each line to callback
-                    lines = new_content.split('\n')
-                    
-                    # Handle the case where the last line doesn't end with newline
-                    if new_content.endswith('\n'):
-                        # Process all lines
-                        for line in lines[:-1]:  # Exclude the last empty string
-                            if line.strip():
-                                self.callback(line)
-                    else:
-                        # Last line is incomplete, keep it for next read
-                        for line in lines[:-1]:  # Process complete lines
-                            if line.strip():
-                                self.callback(line)
-                        # The incomplete line is in lines[-1], we'll handle it next time
-                        
-                self.position = self.file_handle.tell()
-                self.size = file_size
-                
-        except Exception as e:
-            self.logger.error(f"Error checking updates for {self.file_path}: {str(e)}")
-            # Try to reopen the file handle if there was an error
-            try:
-                if self.file_handle:
-                    self.file_handle.close()
-                self.file_handle = open(self.file_path, 'r', encoding='utf-8', errors='ignore')
-                self.file_handle.seek(0, os.SEEK_END)
-                self.position = self.file_handle.tell()
-            except Exception as reopen_error:
-                self.logger.error(f"Error reopening file {self.file_path}: {str(reopen_error)}")
-
-
 class WorkflowFileHandler(FileSystemEventHandler):
     """
     Event handler for workflow file changes.
@@ -190,22 +36,23 @@ class WorkflowFileHandler(FileSystemEventHandler):
     def on_modified(self, event):
         """Handle file modification events."""
         if not event.is_directory:
-            self._handle_event('modified', event.src_path)
-    
+            self._handle_event('modified', str(event.src_path))
+
     def on_created(self, event):
         """Handle file creation events."""
         if not event.is_directory:
-            self._handle_event('created', event.src_path)
-    
+            self._handle_event('created', str(event.src_path))
+
     def on_deleted(self, event):
         """Handle file deletion events."""
         if not event.is_directory:
-            self._handle_event('deleted', event.src_path)
-    
+            self._handle_event('deleted', str(event.src_path))
+
     def on_moved(self, event):
         """Handle file move events."""
         if not event.is_directory:
-            self._handle_event('moved', event.dest_path if hasattr(event, 'dest_path') else event.src_path)
+            dest_path = getattr(event, 'dest_path', event.src_path)
+            self._handle_event('moved', str(dest_path))
     
     def _handle_event(self, event_type: str, file_path: str):
         """
@@ -226,7 +73,7 @@ class FileMonitor:
     Monitors workflow files and directories for changes with real-time log tailing capabilities.
     """
     
-    def __init__(self, config, state_manager, event_bus=None):
+    def __init__(self, config, state_manager, event_bus=None, log_processor=None):
         """
         Initialize the file monitor.
         
@@ -234,16 +81,17 @@ class FileMonitor:
             config: Application configuration
             state_manager: State manager instance
             event_bus: Optional event bus for notifications
+            log_processor: Optional log processor for integrating log processing
         """
         self.config = config
         self.state_manager = state_manager
         self.event_bus = event_bus
+        self.log_processor = log_processor
         self.logger = logging.getLogger(__name__)
         
         self.observer = Observer()
         self.monitoring_paths = set()
-        self.log_tailing_paths = set()
-        self.tailers: Dict[Path, LogFileTailer] = {}
+        self.log_tailing_paths: Dict[Path, int] = {}  # Path -> last_read_position
         self.event_handler = WorkflowFileHandler(self._on_file_change)
         self.running = False
         self.thread = None
@@ -274,66 +122,38 @@ class FileMonitor:
         # Notify state manager about the change
         self.state_manager.update_from_file_change(event_type, file_path)
         
-        # Check if this is a log file and handle tailing
-        file_path_obj = Path(file_path)
-        if self._is_log_file(file_path_obj):
-            self._handle_log_file_change(event_type, file_path_obj)
-        
         # Optionally trigger UI updates or other actions
         self._trigger_refresh(event_type, file_path)
-    
+
     def _is_log_file(self, file_path: Path) -> bool:
         """Check if the file is a log file based on extension or name pattern."""
-        return (file_path.suffix.lower() in ['.log', '.out', '.err'] or 
+        return (file_path.suffix.lower() in ['.log', '.out', '.err'] or
                 'log' in file_path.name.lower())
     
-    def _handle_log_file_change(self, event_type: str, file_path: Path):
-        """Handle log file changes specifically for real-time tailing."""
-        if event_type == 'created' and file_path in self.log_tailing_paths:
-            # New log file created, start tailing if not already
-            if file_path not in self.tailers:
-                self._start_tailing_log_file(file_path)
-        elif event_type == 'deleted' and file_path in self.tailers:
-            # Log file deleted, stop tailing
-            self._stop_tailing_log_file(file_path)
-    
-    def _start_tailing_log_file(self, file_path: Path):
-        """Start tailing a log file."""
-        def log_callback(line: str):
-            # Process the new log line
-            self._process_new_log_line(file_path, line)
-        
-        tailer = LogFileTailer(file_path, log_callback)
-        self.tailers[file_path] = tailer
-        tailer.start()
-        self.logger.info(f"Started tailing log file: {file_path}")
-    
-    def _stop_tailing_log_file(self, file_path: Path):
-        """Stop tailing a log file."""
-        if file_path in self.tailers:
-            self.tailers[file_path].stop()
-            del self.tailers[file_path]
-            self.logger.info(f"Stopped tailing log file: {file_path}")
     
     def _process_new_log_line(self, file_path: Path, line: str):
         """Process a new log line from tailing."""
         try:
-            # Add the new log line to the state manager
-            self.state_manager.add_log_entry({
-                'timestamp': time.time(),
-                'file_path': str(file_path),
-                'line': line,
-                'source': 'tail'
-            })
-            
+            if self.log_processor:
+                # Use the log processor to handle the new line
+                self.log_processor.process_new_log_line(file_path, line)
+            else:
+                # Fallback to old behavior if no log processor is provided
+                self.state_manager.add_log_entry('default', {
+                    'timestamp': time.time(),
+                    'file_path': str(file_path),
+                    'line': line,
+                    'source': 'tail'
+                })
+
             # Emit event via event bus if available
             if self.event_bus:
-                self.event_bus.emit('log_line_added', {
+                self.event_bus.publish('log_line_added', {
                     'file_path': str(file_path),
                     'line': line,
                     'timestamp': time.time()
                 })
-                
+
         except Exception as e:
             self.logger.error(f"Error processing new log line from {file_path}: {str(e)}")
     
@@ -368,38 +188,30 @@ class FileMonitor:
         self.thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.thread.start()
         
-        # Start tailing any existing log files
-        self._start_existing_log_tailing()
-        
         self.logger.info("File monitoring started")
-    
-    def _start_existing_log_tailing(self):
-        """Start tailing any existing log files that should be tailed."""
-        for workflow_config in self.config.workflows:
-            path = Path(workflow_config['path'])
-            if path.is_file() and self._is_log_file(path):
-                self.add_log_file_for_tailing(path)
-            elif path.is_dir():
-                # Find log files in the directory
-                log_files = FileUtils.find_files(path, extensions=['.log', '.out', '.err'])
-                for log_file in log_files:
-                    self.add_log_file_for_tailing(log_file)
-    
+
     def _monitor_loop(self):
-        """Main monitoring loop (if needed for polling approach)."""
+        """Main monitoring loop for polling log files."""
         while self.running:
-            # Additional monitoring logic can go here if needed
-            # For now, we rely on the watchdog observer and log tailers
-            time.sleep(1)
+            for path, last_pos in list(self.log_tailing_paths.items()):
+                if not path.exists():
+                    continue
+                try:
+                    with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                        f.seek(last_pos)
+                        new_lines = f.readlines()
+                        if new_lines:
+                            for line in new_lines:
+                                self._process_new_log_line(path, line.strip())
+                            self.log_tailing_paths[path] = f.tell()
+                except Exception as e:
+                    self.logger.error(f"Error tailing file {path}: {e}")
+            time.sleep(self.config.monitor.poll_interval)
     
     def stop(self):
         """Stop monitoring files."""
         if not self.running:
             return
-        
-        # Stop all log tailers
-        for file_path in list(self.tailers.keys()):
-            self._stop_tailing_log_file(file_path)
         
         self.observer.stop()
         self.observer.join(timeout=5)  # Wait up to 5 seconds for cleanup
@@ -464,11 +276,8 @@ class FileMonitor:
             return
         
         if file_path not in self.log_tailing_paths:
-            self.log_tailing_paths.add(file_path)
-            
-            if self.running:
-                # Start tailing if monitor is already running
-                self._start_tailing_log_file(file_path)
+            self.log_tailing_paths[file_path] = file_path.stat().st_size if file_path.exists() else 0
+            self.logger.info(f"Added log file for tailing: {file_path}")
     
     def remove_log_file_from_tailing(self, file_path: Path):
         """
@@ -478,8 +287,8 @@ class FileMonitor:
             file_path: Path to the log file to stop tailing
         """
         if file_path in self.log_tailing_paths:
-            self.log_tailing_paths.remove(file_path)
-            self._stop_tailing_log_file(file_path)
+            del self.log_tailing_paths[file_path]
+            self.logger.info(f"Removed log file from tailing: {file_path}")
     
     def is_tailing(self, file_path: Path) -> bool:
         """
@@ -491,4 +300,4 @@ class FileMonitor:
         Returns:
             True if log file is being tailed, False otherwise
         """
-        return file_path in self.tailers
+        return file_path in self.log_tailing_paths

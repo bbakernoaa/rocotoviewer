@@ -60,14 +60,6 @@ class LogViewer(Container):
         self.log_details = Static(id="log-details", classes="log-details")
         self.status_label = Label("Real-time updates: ON", id="status-label")
         
-        # Set up the log table
-        self.log_table.cursor_type = "row"
-        self.log_table.add_column("Time", key="timestamp", width=18)
-        self.log_table.add_column("Level", key="level", width=8)
-        self.log_table.add_column("Task", key="task_id", width=15)
-        self.log_table.add_column("Status", key="status", width=12)
-        self.log_table.add_column("Message", key="message")
-        
         # Buffer for real-time updates
         self.log_buffer = deque(maxlen=self.max_lines)
         
@@ -98,6 +90,14 @@ class LogViewer(Container):
     
     def on_mount(self) -> None:
         """Called when the widget is mounted."""
+        # Set up the log table
+        self.log_table.cursor_type = "row"
+        self.log_table.add_column("Time", key="timestamp", width=18)
+        self.log_table.add_column("Level", key="level", width=8)
+        self.log_table.add_column("Task", key="task_id", width=15)
+        self.log_table.add_column("Status", key="status", width=12)
+        self.log_table.add_column("Message", key="message")
+
         # Initialize with empty table
         self.update_logs([])
         
@@ -162,8 +162,7 @@ class LogViewer(Container):
             level_display,
             task_id,
             status,
-            message,
-            update_widths=False  # Don't update column widths for each row
+            message
         )
         
         # Keep the table size manageable by removing old rows if needed
@@ -234,12 +233,9 @@ class LogViewer(Container):
         # In a real implementation, we'd handle scrolling properly
         pass
     
-    def refresh(self) -> bool:
+    def refresh_view(self) -> None:
         """
         Refresh the log display with current state data.
-        
-        Returns:
-            True if refresh was successful
         """
         try:
             # Get recent logs from the log processor
@@ -252,10 +248,8 @@ class LogViewer(Container):
             
             # Update the display
             self.log_entries = recent_logs
-            return True
         except Exception as e:
             self.logger.error(f"Error refreshing log viewer: {str(e)}")
-            return False
     
     def watch_log_entries(self, old_value: List[Dict[str, Any]], new_value: List[Dict[str, Any]]) -> None:
         """Called when the log entries change."""
@@ -283,9 +277,8 @@ Log Entry Details:
     
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the log table."""
-        row_key = event.row_key.value
-        if 0 <= row_key < len(self.log_entries):
-            self.selected_log_entry = self.log_entries[row_key]
+        if 0 <= event.cursor_row < len(self.log_entries):
+            self.selected_log_entry = self.log_entries[event.cursor_row]
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events."""

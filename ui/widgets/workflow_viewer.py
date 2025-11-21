@@ -17,6 +17,7 @@ from textual.message import Message
 from textual.events import Click
 from textual import work
 from rich.text import Text
+from textual.coordinate import Coordinate
 
 from ...config.config import Config
 from ...core.state_manager import StateManager
@@ -76,14 +77,6 @@ class WorkflowViewer(Container):
         # Initialize performance optimizer
         self.performance_optimizer = PerformanceOptimizer()
         
-        # Set up the task table
-        self.task_table.add_column("ID", key="id")
-        self.task_table.add_column("Status", key="status")
-        self.task_table.add_column("Cycle", key="cycle")
-        self.task_table.add_column("Start Time", key="start_time")
-        self.task_table.add_column("End Time", key="end_time")
-        self.task_table.add_column("Duration", key="duration")
-        
         # Initialize search and filter controls
         self.search_label = Static("🔍 Search: ", id="search-label")
         self.search_input = Input(placeholder="Enter search term...", id="search-input")
@@ -139,6 +132,14 @@ class WorkflowViewer(Container):
     
     def on_mount(self) -> None:
         """Called when the widget is mounted."""
+        # Set up the task table
+        self.task_table.add_column("ID", key="id")
+        self.task_table.add_column("Status", key="status")
+        self.task_table.add_column("Cycle", key="cycle")
+        self.task_table.add_column("Start Time", key="start_time")
+        self.task_table.add_column("End Time", key="end_time")
+        self.task_table.add_column("Duration", key="duration")
+
         # Load initial workflows
         self.update_workflows()
         
@@ -146,8 +147,9 @@ class WorkflowViewer(Container):
         if self.config.display.refresh_interval > 0:
             self.set_interval(self.config.display.refresh_interval, self.refresh)
         
-        # Set up search input event handling
-        self.search_input.watch("value", self._on_search_input_changed)
+        # Set up periodic refresh if configured
+        if self.config.display.refresh_interval > 0:
+            self.set_interval(self.config.display.refresh_interval, self.refresh_view)
     
     def _on_workflow_event(self, event: WorkflowEvent):
         """Handle workflow state update events."""
@@ -413,11 +415,11 @@ Total Cycles: {len(wf_info.get('cycles', []))}
         tasks = wf_info.get('tasks', [])
         
         if not tasks:
-            self.progress_bar.update(0.0)
+            self.progress_bar.progress = 0.0
             return
         
         progress_percent, _ = StatusVisualization.calculate_workflow_progress(tasks)
-        self.progress_bar.update(progress_percent / 100.0)  # Convert to 0-1 range
+        self.progress_bar.progress = progress_percent  # Value is 0-100
     
     def _update_status_summary(self, workflow_data: Dict[str, Any]) -> None:
         """Update the status summary panel."""
@@ -470,21 +472,16 @@ Status Summary:
         if new_value:
             self.select_workflow(new_value)
     
-    def refresh(self) -> bool:
+    def refresh_view(self) -> None:
         """
         Refresh the workflow display with current state data.
-        
-        Returns:
-            True if refresh was successful
         """
         try:
             self.update_workflows()
             if self.selected_workflow_id:
                 self.select_workflow(self.selected_workflow_id)
-            return True
         except Exception as e:
             self.logger.error(f"Error refreshing workflow viewer: {str(e)}")
-            return False
     
     def get_selected_workflow_id(self) -> Optional[str]:
         """
@@ -542,13 +539,14 @@ Status Summary:
     
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the task table."""
-        if event.cursor_row < len(self.task_table.rows):
-            # Get the task ID from the selected row
-            task_id = list(self.task_table.rows.values())[event.cursor_row][0].plain
-            self.selected_task_id = task_id
-            
+        try:
+            task_id = self.task_table.get_cell_at(Coordinate(event.cursor_row, 0))
+            self.selected_task_id = task_id.plain
+
             # Emit task selected event
-            self.post_message(self.TaskSelected(task_id))
+            self.post_message(self.TaskSelected(self.selected_task_id))
+        except Exception as e:
+            self.logger.error(f"Error getting task from row {event.cursor_row}: {e}")
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events for filters."""
@@ -592,27 +590,21 @@ Status Summary:
         """Handle keyboard events for navigation and interaction."""
         # Task table navigation
         if event.key == "up" and self.task_table.has_focus:
-            if self.task_table_row_index > 0:
-                self.task_table_row_index -= 1
-                # Update selection in task table
-                if self.task_table_row_index < len(self.task_table.rows):
-                    self.task_table.cursor_row = self.task_table_row_index
+            self.task_table.move_cursor(row=-1, animate=True)
         elif event.key == "down" and self.task_table.has_focus:
-            if self.task_table_row_index < len(self.task_table.rows) - 1:
-                self.task_table_row_index += 1
-                # Update selection in task table
-                if self.task_table_row_index < len(self.task_table.rows):
-                    self.task_table.cursor_row = self.task_table_row_index
+            self.task_table.move_cursor(row=1, animate=True)
         elif event.key == "enter" and self.task_table.has_focus:
             # Handle enter key on selected task
-            if self.task_table_row_index < len(self.task_table.rows):
-                task_id = list(self.task_table.rows.values())[self.task_table_row_index][0].plain
+            cursor_row = self.task_table.cursor_row
+            if cursor_row < self.task_table.row_count:
+                task_id = self.task_table.get_cell_at(Coordinate(cursor_row, 0)).plain
                 self.selected_task_id = task_id
                 self.post_message(self.TaskSelected(task_id))
         elif event.key == "f2" and self.task_table.has_focus:
             # Show context menu for task with F2 key
-            if self.task_table_row_index < len(self.task_table.rows):
-                task_id = list(self.task_table.rows.values())[self.task_table_row_index][0].plain
+            cursor_row = self.task_table.cursor_row
+            if cursor_row < self.task_table.row_count:
+                task_id = self.task_table.get_cell_at(Coordinate(cursor_row, 0)).plain
                 self.selected_task_id = task_id
                 # Get current cursor position for context menu
                 cursor_x, cursor_y = self.task_table.size
@@ -693,11 +685,12 @@ Status Summary:
             super().__init__()
             self.workflow_id = workflow_id
     
-    def _on_search_input_changed(self, value: str) -> None:
+    def on_input_changed(self, event: Input.Changed) -> None:
         """Handle changes to the search input."""
-        self.search_term = value
-        # Update the display to reflect the new search term
-        if self.selected_workflow_id:
-            workflow_data = self.state_manager.get_workflow(self.selected_workflow_id)
-            if workflow_data:
-                self._update_task_table(workflow_data)
+        if event.input.id == "search-input":
+            self.search_term = event.value
+            # Update the display to reflect the new search term
+            if self.selected_workflow_id:
+                workflow_data = self.state_manager.get_workflow(self.selected_workflow_id)
+                if workflow_data:
+                    self._update_task_table(workflow_data)

@@ -63,6 +63,38 @@ class Config:
         if os.getenv('ROCOTOVIEWER_POLL_INTERVAL'):
             self.monitor.poll_interval = int(os.getenv('ROCOTOVIEWER_POLL_INTERVAL', 10))
 
+    @staticmethod
+    def get_default_config_dict() -> Dict[str, Any]:
+        """
+        Get default configuration dictionary.
+        
+        Returns:
+            Default configuration dictionary
+        """
+        return {
+            'workflows': [
+                {
+                    'path': './workflows/',
+                    'name': 'Default Workflow Directory',
+                    'monitor': True
+                }
+            ],
+            'display': {
+                'theme': 'default',
+                'refresh_interval': 5,
+                'max_log_lines': 100
+            },
+            'monitor': {
+                'enabled': True,
+                'poll_interval': 10,
+                'max_file_size': 10485760  # 10MB
+            },
+            'logging': {
+                'level': 'INFO',
+                'file': ''
+            }
+        }
+
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> 'Config':
         """

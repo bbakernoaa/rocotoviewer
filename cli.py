@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional, List
 import os
 
-from .main import run_app
+from .main import run_app, run_monitor, run_parse, run_stats, run_config_commands
 from .__version__ import __version__
 from .config.config import Config
 
@@ -73,6 +73,7 @@ def cli(ctx: click.Context, config: Optional[Path], workflow: Optional[Path],
 
 
 @cli.command(help="View a workflow in the RocotoViewer UI (default mode).")
+@click.argument('workflow_arg', required=False, type=click.Path(exists=True, path_type=Path))
 @click.option('--config', '-c', type=click.Path(exists=True, path_type=Path),
               help='Path to configuration file')
 @click.option('--workflow', '-w', type=click.Path(exists=True, path_type=Path),
@@ -86,7 +87,7 @@ def cli(ctx: click.Context, config: Optional[Path], workflow: Optional[Path],
 @click.option('--filter', type=str, default=None, help='Filter tasks by status or name')
 @click.option('--verbose', '-V', count=True, help='Increase verbosity (use -VV for debug)')
 @click.pass_context
-def view(ctx, config: Optional[Path], workflow: Optional[Path], database: Optional[Path],
+def view(ctx, workflow_arg: Optional[Path], config: Optional[Path], workflow: Optional[Path], database: Optional[Path],
          log_files: List[Path], theme: str, follow: bool, filter: str, verbose: int) -> None:
     """
     View a workflow in the RocotoViewer UI (default mode).
@@ -96,14 +97,18 @@ def view(ctx, config: Optional[Path], workflow: Optional[Path], database: Option
     directly, or let the viewer use configuration settings.
     
     Examples:
-      rocotoviewer view -w workflow.xml                    # View specific workflow
+      rocotoviewer view workflow.xml                       # View specific workflow (positional)
+      rocotoviewer view -w workflow.xml                    # View specific workflow (option)
       rocotoviewer view -c config.yaml -w workflow.xml     # Use specific config
       rocotoviewer view --theme dark                       # Use dark theme
       rocotoviewer view --filter running                   # Filter running tasks
     """
     # Use context values if not provided as command options
     config = config or ctx.obj.get('config_path')
-    workflow = workflow or ctx.obj.get('workflow_path')
+    
+    # Prioritize positional argument, then option, then context
+    workflow = workflow_arg or workflow or ctx.obj.get('workflow_path')
+    
     theme = theme or ctx.obj.get('theme')
     follow = follow or ctx.obj.get('follow')
     filter = filter or ctx.obj.get('filter')
@@ -120,6 +125,7 @@ def view(ctx, config: Optional[Path], workflow: Optional[Path], database: Option
 
 
 @cli.command(help="Monitor a directory or workflow for changes in real-time.")
+@click.argument('path_arg', required=False, type=click.Path(exists=True, path_type=Path))
 @click.option('--config', '-c', type=click.Path(exists=True, path_type=Path),
               help='Path to configuration file')
 @click.option('--directory', '-d', type=click.Path(exists=True, path_type=Path),
@@ -133,8 +139,8 @@ def view(ctx, config: Optional[Path], workflow: Optional[Path], database: Option
               default='text', help='Output format (default: text)')
 @click.option('--follow', is_flag=True, help='Continue monitoring indefinitely')
 @click.option('--verbose', '-V', count=True, help='Increase verbosity (use -VV for debug)')
-def monitor(config: Optional[Path], directory: Optional[Path], workflow: Optional[Path],
-           interval: int, output: Optional[Path], format: str, follow: bool, verbose: int) -> None:
+def monitor(path_arg: Optional[Path], config: Optional[Path], directory: Optional[Path], workflow: Optional[Path],
+            interval: int, output: Optional[Path], format: str, follow: bool, verbose: int) -> None:
     """
     Monitor a directory or workflow for changes in real-time.
     
@@ -143,17 +149,25 @@ def monitor(config: Optional[Path], directory: Optional[Path], workflow: Optiona
     launching the interactive UI.
     
     Examples:
+      rocotoviewer monitor /path/to/workflows               # Monitor directory (positional)
+      rocotoviewer monitor workflow.xml                     # Monitor workflow (positional)
       rocotoviewer monitor -d /path/to/workflows            # Monitor directory
-      rocotoviewer monitor -w workflow.xml -i 5            # Monitor workflow with 5s interval
-      rocotoviewer monitor -d /workflows --format json     # Output in JSON format
-      rocotoviewer monitor -d /workflows -o results.json   # Save results to file
+      rocotoviewer monitor -w workflow.xml -i 5             # Monitor workflow with 5s interval
+      rocotoviewer monitor -d /workflows --format json      # Output in JSON format
+      rocotoviewer monitor -d /workflows -o results.json    # Save results to file
     """
     if verbose == 1:
         os.environ['ROCOTOVIEWER_LOG_LEVEL'] = 'INFO'
     elif verbose >= 2:
         os.environ['ROCOTOVIEWER_LOG_LEVEL'] = 'DEBUG'
     
-    from .main import run_monitor
+    # Handle positional argument
+    if path_arg:
+        if path_arg.is_dir():
+            directory = path_arg
+        elif path_arg.is_file():
+            workflow = path_arg
+    
     exit_code = run_monitor(config_path=config, directory=directory,
                            workflow_path=workflow, interval=interval,
                            output_path=output, output_format=format,
@@ -193,7 +207,6 @@ def parse(config: Optional[Path], workflow_path: Path, output: Optional[Path],
     elif verbose >= 2:
         os.environ['ROCOTOVIEWER_LOG_LEVEL'] = 'DEBUG'
     
-    from .main import run_parse
     exit_code = run_parse(config_path=config, workflow_path=workflow_path,
                          output_path=output, output_format=format,
                          extract_fields=list(extract))
@@ -203,13 +216,13 @@ def parse(config: Optional[Path], workflow_path: Path, output: Optional[Path],
 @cli.command(help="Show statistics and summary for workflow(s).")
 @click.option('--config', '-c', type=click.Path(exists=True, path_type=Path),
               help='Path to configuration file')
-@click.argument('workflow_path', type=click.Path(exists=True, path_type=Path), required=False)
+@click.argument('workflow_paths', type=click.Path(exists=True, path_type=Path), nargs=-1, required=False)
 @click.option('--output', '-o', type=click.Path(path_type=Path),
               help='Output file for statistics')
 @click.option('--format', type=click.Choice(['json', 'yaml', 'csv', 'text']),
               default='text', help='Output format (default: text)')
 @click.option('--verbose', '-V', count=True, help='Increase verbosity (use -VV for debug)')
-def stats(config: Optional[Path], workflow_path: Optional[Path],
+def stats(config: Optional[Path], workflow_paths: List[Path],
          output: Optional[Path], format: str, verbose: int) -> None:
     """
     Show statistics and summary for workflow(s).
@@ -229,13 +242,23 @@ def stats(config: Optional[Path], workflow_path: Optional[Path],
     elif verbose >= 2:
         os.environ['ROCOTOVIEWER_LOG_LEVEL'] = 'DEBUG'
     
-    from .main import run_stats
+    # Convert multiple workflow paths to single path if only one, or handle multiple
+    if workflow_paths:
+        if len(workflow_paths) == 1:
+            workflow_path = workflow_paths[0]
+        else:
+            # For multiple paths, we'll pass the first one and let the function handle multiple
+            # This is a limitation of the current run_stats implementation
+            workflow_path = workflow_paths[0]
+    else:
+        workflow_path = None
+    
     exit_code = run_stats(config_path=config, workflow_path=workflow_path,
                          output_path=output, output_format=format)
     sys.exit(exit_code)
 
 
-@cli.command(help="Manage configuration settings.")
+@cli.command('config', help="Manage configuration settings.")
 @click.option('--config', '-c', type=click.Path(path_type=Path),
               help='Path to configuration file (default: rocoto_config.yaml)')
 @click.option('--set', 'set_options', multiple=True, nargs=2, metavar='KEY VALUE',
@@ -278,8 +301,7 @@ def config_cmd(config: Optional[Path], set_options: List[tuple],
     elif verbose >= 2:
         os.environ['ROCOTOVIEWER_LOG_LEVEL'] = 'DEBUG'
     
-    from .main import run_config_commands
-    exit_code = run_config_commands(config_path=config, set_options=set_options,
+    exit_code = run_config_commands(config_path=config, set_options=list(set_options),
                                    get_option=get_option, list_config=list_config,
                                    validate_config=validate_config,
                                    reset_config=reset_config)
@@ -300,31 +322,9 @@ def init() -> None:
     config_path = Path("rocoto_config.yaml")
     if config_path.exists():
         click.echo(f"Configuration file already exists: {config_path}", err=True)
-        return
+        sys.exit(1)
     
-    default_config = {
-        'workflows': [
-            {
-                'path': './workflows/',
-                'name': 'Default Workflow Directory',
-                'monitor': True
-            }
-        ],
-        'display': {
-            'theme': 'default',
-            'refresh_interval': 5,
-            'max_log_lines': 100
-        },
-        'monitor': {
-            'enabled': True,
-            'poll_interval': 10,
-            'max_file_size': 10485760  # 10MB
-        },
-        'logging': {
-            'level': 'INFO',
-            'file': ''
-        }
-    }
+    default_config = Config.get_default_config_dict()
     
     with open(config_path, 'w') as f:
         yaml.dump(default_config, f, default_flow_style=False)

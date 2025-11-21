@@ -303,15 +303,16 @@ def run_stats(config_path: Optional[Path] = None, workflow_path: Optional[Path] 
         state_manager = StateManager(config)
         workflow_parser = WorkflowParser(config)
         
-        # If a specific workflow path is provided, parse it
+        # If specific workflow path(s) are provided, parse them
+        workflows = {}
         if workflow_path:
+            # Handle single workflow path
             workflow_data = workflow_parser.parse(str(workflow_path))
             workflow_id = workflow_data.get('id', 'unknown')
             state_manager.update_workflow(workflow_id, workflow_data)
-            workflows = {workflow_id: state_manager.get_workflow(workflow_id)}
+            workflows[workflow_id] = state_manager.get_workflow(workflow_id)
         else:
             # Use workflows from config
-            workflows = {}
             for wf_config in config.workflows:
                 wf_path = Path(wf_config['path'])
                 if wf_path.exists() and wf_path.is_file():

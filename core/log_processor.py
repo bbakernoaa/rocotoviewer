@@ -12,6 +12,20 @@ from datetime import datetime
 import logging
 from collections import deque
 from ..utils.file_utils import FileUtils
+from ..config.settings import Settings
+
+
+class LogProcessingError(Exception):
+    """Base exception for log processing errors."""
+    pass
+
+class LogFileAccessError(LogProcessingError):
+    """Raised when a log file cannot be accessed."""
+    pass
+
+class LogParseError(LogProcessingError):
+    """Raised when a log line cannot be parsed."""
+    pass
 
 
 class StreamingLogProcessor:
@@ -30,13 +44,7 @@ class StreamingLogProcessor:
         self.logger = logging.getLogger(__name__)
         
         # Common log patterns for Rocoto workflows
-        self.patterns = {
-            'timestamp': r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}',
-            'task_status': r'(?:INFO|WARN|ERROR|DEBUG).*?(?:succeeded|failed|submitted|running)',
-            'cycle_info': r'cycle=(\d+)',
-            'task_id': r'task=([a-zA-Z0-9_]+)',
-            'rocoto_task': r'(?:INFO|WARN|ERROR).*?task_([a-zA-Z0-9_]+)',
-        }
+        self.patterns = Settings().LOG_PATTERNS
         
         # Buffer for streaming logs
         self.stream_buffers: Dict[Path, deque] = {}
@@ -108,7 +116,7 @@ class StreamingLogProcessor:
         
         return parsed_entry
     
-    def read_log_file_streaming(self, log_path: Path, 
+    def read_log_file_streaming(self, log_path: Path,
                               max_lines: Optional[int] = None) -> Generator[Dict[str, Any], None, None]:
         """
         Read log file in streaming fashion, yielding one entry at a time.
@@ -122,7 +130,7 @@ class StreamingLogProcessor:
         """
         if not log_path.exists():
             self.logger.warning(f"Log file does not exist: {log_path}")
-            return
+            raise LogFileAccessError(f"Log file does not exist: {log_path}")
         
         try:
             with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -142,6 +150,7 @@ class StreamingLogProcessor:
                     
         except Exception as e:
             self.logger.error(f"Error reading log file {log_path}: {str(e)}")
+            raise LogFileAccessError(f"Failed to read log file {log_path}: {str(e)}")
     
     def read_log_file(self, log_path: Path, max_lines: Optional[int] = None) -> List[str]:
         """
@@ -156,7 +165,7 @@ class StreamingLogProcessor:
         """
         if not log_path.exists():
             self.logger.warning(f"Log file does not exist: {log_path}")
-            return []
+            raise LogFileAccessError(f"Log file does not exist: {log_path}")
         
         try:
             with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -170,7 +179,7 @@ class StreamingLogProcessor:
             
         except Exception as e:
             self.logger.error(f"Error reading log file {log_path}: {str(e)}")
-            return []
+            raise LogFileAccessError(f"Failed to read log file {log_path}: {str(e)}")
     
     def parse_log_line(self, line: str) -> Dict[str, Any]:
         """
@@ -238,6 +247,10 @@ class StreamingLogProcessor:
         message = line
         if timestamp_match:
             message = message.replace(timestamp_match.group(), '', 1).strip()
+        # Remove log level if it's at the beginning
+        if result['level'] in message:
+            # Use regex to remove the log level more precisely
+            message = re.sub(r'^' + re.escape(result['level']), '', message, count=1).strip()
         result['message'] = message.strip()
         
         return result
@@ -425,12 +438,7 @@ class LogProcessor:
         self.streaming_processor = StreamingLogProcessor(config)
         
         # Common log patterns for Rocoto workflows
-        self.patterns = {
-            'timestamp': r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}',
-            'task_status': r'(?:INFO|WARN|ERROR|DEBUG).*?(?:succeeded|failed|submitted|running)',
-            'cycle_info': r'cycle=(\d+)',
-            'task_id': r'task=([a-zA-Z0-9_]+)',
-        }
+        self.patterns = Settings().LOG_PATTERNS
     
     def register_stream_callback(self, log_path: Path, callback: Callable[[Dict[str, Any]], None]):
         """
@@ -441,6 +449,16 @@ class LogProcessor:
             callback: Function to call when new log entries are available
         """
         return self.streaming_processor.register_stream_callback(log_path, callback)
+    
+    def unregister_stream_callback(self, log_path: Path, callback: Callable[[Dict[str, Any]], None]):
+        """
+        Unregister a callback from receiving real-time log updates.
+        
+        Args:
+            log_path: Path to the log file
+            callback: Function to remove from callbacks
+        """
+        return self.streaming_processor.unregister_stream_callback(log_path, callback)
     
     def process_new_log_line(self, log_path: Path, line: str) -> Optional[Dict[str, Any]]:
         """

@@ -50,16 +50,11 @@ class RocotoViewerApp(App):
             log_processor: Log processor instance
             workflow_parser: Workflow parser instance
         """
-        super().__init__()
-        
         self.config = config
         self.state_manager = state_manager
         self.log_processor = log_processor
         self.workflow_parser = workflow_parser
         self.logger = logging.getLogger(__name__)
-        
-        # Theme
-        self.theme = DefaultTheme()
         
         # Current screen
         self.current_screen = "main"
@@ -67,6 +62,8 @@ class RocotoViewerApp(App):
         # Create screen instances
         self.main_screen = MainScreen(config, state_manager, log_processor, workflow_parser)
         self.log_viewer_screen = LogViewerScreen(config, state_manager, log_processor, workflow_parser)
+
+        super().__init__()
     
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -120,19 +117,20 @@ class RocotoViewerApp(App):
     
     def refresh_ui(self) -> None:
         """Refresh the entire UI."""
-        self.log("UI refreshed")
+        self._log("UI refreshed")
     
-    def log(self, message: str) -> None:
+    def _log(self, message: str) -> None:
         """Log a message to the status bar or console."""
         self.logger.info(message)
     
     def watch_current_screen(self, old_screen: str, new_screen: str) -> None:
         """Called when the current screen changes."""
-        self.log(f"Switched from {old_screen} to {new_screen}")
+        self._log(f"Switched from {old_screen} to {new_screen}")
     
-    def refresh(self) -> None:
+    def refresh(self, *, repaint: bool = True, layout: bool = False, recompose: bool = True) -> 'RocotoViewerApp':
         """Refresh the application display."""
         self.action_refresh()
+        return self
     
     def load_workflow(self, workflow_path: str) -> None:
         """

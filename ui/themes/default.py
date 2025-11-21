@@ -31,9 +31,12 @@ class DefaultTheme(Theme):
             background="#1E1E1E",
             surface="#2D2D2D",
             panel="#3E3E3E",
-            border="#555555",
-            text="#FFFFFF",
         )
+        
+        # Custom attributes for RocotoViewer
+        self.border_color = "#555555"
+        self.text_color = "#FFFFFF"
+        self.text = "#FFFFFF"  # Add missing 'text' attribute
         
         self.logger = logging.getLogger(self.__class__.__name__)
         
@@ -136,8 +139,8 @@ class DefaultTheme(Theme):
             'success': self.success,
             'accent': self.accent,
             'background': self.background,
-            'text': self.text,
-            'border': self.border,
+            'text': self.text_color,
+            'border': self.border_color,
         }
         
         if color_name not in color_map:
@@ -167,7 +170,7 @@ class DefaultTheme(Theme):
         elif any(s in status_lower for s in ['info', 'debug', 'verbose']):
             return self.primary
         else:
-            return self.text
+            return self.text_color
     
     def get_workflow_status_style(self, status: str) -> str:
         """
@@ -216,7 +219,7 @@ class DefaultTheme(Theme):
         elif level_lower == 'debug':
             return f"bold {self.accent}"
         else:
-            return f"{self.text}"
+            return f"{self.text_color}"
     
     @classmethod
     def get_theme_config(cls) -> Dict[str, Any]:
@@ -239,8 +242,8 @@ class DefaultTheme(Theme):
             'background': theme.background,
             'surface': theme.surface,
             'panel': theme.panel,
-            'border': theme.border,
-            'text': theme.text,
+            'border': theme.border_color,
+            'text': theme.text_color,
         }
     
     def apply_to_app(self, app) -> None:

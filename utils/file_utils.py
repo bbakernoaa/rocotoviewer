@@ -344,7 +344,7 @@ class FileUtils:
                     pos = size - 1
                     
                     # Move backwards to find line breaks
-                    while pos > 0 and lines_found < num_lines:
+                    while pos >= 0 and lines_found < num_lines:
                         if mmapped_file[pos:pos+1] == b'\n':
                             lines_found += 1
                         pos -= 1
@@ -353,8 +353,8 @@ class FileUtils:
                     if lines_found < num_lines:
                         pos = 0
                     else:
-                        # Skip the current newline character
-                        pos += 2  # Move past the newline and the position we were at
+                        # Move to the start of the current line (after the newline)
+                        pos += 1
                     
                     # Read the content from pos to end
                     content = mmapped_file[pos:size].decode(encoding, errors='replace')

@@ -4,8 +4,8 @@ Settings management for RocotoViewer.
 This module provides application-wide settings and constants.
 """
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, Dict
 
 
 @dataclass
@@ -42,6 +42,15 @@ class Settings:
     # Parsing settings
     MAX_PARSE_RETRIES: int = 3
     PARSE_TIMEOUT: int = 30  # seconds
+
+    # Log Patterns
+    LOG_PATTERNS: Dict[str, str] = field(default_factory=lambda: {
+        'timestamp': r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?',
+        'task_status': r'(?:INFO|WARN|ERROR|DEBUG).*?(?:succeeded|failed|submitted|running)',
+        'cycle_info': r'cycle=(\d+)',
+        'task_id': r'task=([a-zA-Z0-9_]+)',
+        'rocoto_task': r'(?:INFO|WARN|ERROR).*?task_([a-zA-Z0-9_]+)',
+    })
     
     def __post_init__(self):
         # Ensure extensions are tuples to prevent modification

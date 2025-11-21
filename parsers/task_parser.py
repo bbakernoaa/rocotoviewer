@@ -65,45 +65,41 @@ class TaskParser(BaseParser):
         Returns:
             Dictionary with parsed task data
         """
-        # Detect format version for backward compatibility
-        format_info = self.detect_format_version(source)
-        self.logger.info(f"Detected format: {format_info}")
-        
         if self._is_xml_content(source):
             # Source is XML content, parse directly
             try:
                 root = ET.fromstring(source)
+                # Since it's content, we can't detect format from file path
+                format_info = {'version': 'unknown', 'source_type': 'content'}
                 return self._parse_tasks_from_element(root, format_info)
             except ET.ParseError as e:
                 self.logger.error(f"XML parsing error: {str(e)}")
-                
-                # Try legacy parsing as fallback
-                try:
-                    root = ET.fromstring(source)
-                    return self._parse_legacy_tasks_from_element(root, format_info)
-                except:
-                    return {}
-        else:
-            # Source is a file path
-            if not self.validate_source(source):
                 return {}
+        
+        # Detect format version for backward compatibility from file path
+        format_info = self.detect_format_version(source)
+        self.logger.info(f"Detected format: {format_info}")
+
+        # Source is a file path
+        if not self.validate_source(source):
+            return {}
+        
+        content = self.read_file(source)
+        if content is None:
+            return {}
+        
+        try:
+            root = ET.fromstring(content)
+            return self._parse_tasks_from_element(root, format_info)
+        except ET.ParseError as e:
+            self.logger.error(f"XML parsing error in {source}: {str(e)}")
             
-            content = self.read_file(source)
-            if content is None:
-                return {}
-            
+            # Try legacy parsing as fallback
             try:
                 root = ET.fromstring(content)
-                return self._parse_tasks_from_element(root, format_info)
-            except ET.ParseError as e:
-                self.logger.error(f"XML parsing error in {source}: {str(e)}")
-                
-                # Try legacy parsing as fallback
-                try:
-                    root = ET.fromstring(content)
-                    return self._parse_legacy_tasks_from_element(root, format_info)
-                except:
-                    return {}
+                return self._parse_legacy_tasks_from_element(root, format_info)
+            except:
+                return {}
     
     def _is_xml_content(self, source: str) -> bool:
         """
@@ -190,6 +186,10 @@ class TaskParser(BaseParser):
         task_elements = []
         
         # Look for tasks in various possible locations
+        # Check if the root element itself is a task
+        if root.tag.lower() in ['task', 'taskdef', 'node']:
+            task_elements.append(root)
+
         # Standard Rocoto structure
         tasks_section = root.find('tasks')
         if tasks_section is not None:

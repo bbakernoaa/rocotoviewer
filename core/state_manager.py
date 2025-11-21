@@ -37,8 +37,8 @@ class StateManager:
                 'current_view': 'main',
                 'selected_workflow': None,
                 'selected_task': None,
-                'theme': config.display.theme,
-                'refresh_interval': config.display.refresh_interval,
+                'theme': getattr(config.display, 'theme', 'default'),
+                'refresh_interval': getattr(config.display, 'refresh_interval', 1),
                 'workflow_filters': {
                     'status': None,
                     'search': '',
@@ -292,7 +292,7 @@ class StateManager:
                     self._notify_workflow_change(workflow_id, removed_data, 'removed')
                     
                     # Update session stats
-                    self._update_session_stats(None, None)
+                    self._update_session_stats(workflow_id, removed_data)
     
     def get_workflow(self, workflow_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -304,7 +304,10 @@ class StateManager:
         Returns:
             Workflow data or None if not found
         """
-        return self.get(f'workflows.{workflow_id}')
+        workflow_data = self.get(f'workflows.{workflow_id}')
+        if workflow_data is None:
+            return None
+        return workflow_data
     
     def get_all_workflows(self) -> Dict[str, Any]:
         """
@@ -336,11 +339,11 @@ class StateManager:
             include = True
             
             # Apply status filter
-            if filters.get('status') and filters['status'] != workflow_data.get('status'):
+            if filters.get('status') and workflow_data and workflow_data.get('status') != filters['status']:
                 include = False
             
             # Apply search filter
-            if filters.get('search'):
+            if filters.get('search') and workflow_data:
                 search_term = filters['search'].lower()
                 workflow_name = workflow_data.get('data', {}).get('name', '').lower()
                 if search_term not in workflow_name:
@@ -610,3 +613,49 @@ class StateManager:
         
         tasks = workflow_data.get('data', {}).get('tasks', [])
         return [task for task in tasks if task.get('status', '').lower() == status.lower()]
+    
+    def add_log_entry(self, workflow_id: str, log_entry: Dict[str, Any]):
+        """
+        Add a log entry to the workflow's log history.
+        
+        Args:
+            workflow_id: ID of the workflow
+            log_entry: Log entry to add
+        """
+        # Initialize log entries if they don't exist
+        log_key = f'workflows.{workflow_id}.log_entries'
+        current_logs = self.get(log_key, [])
+        
+        # Add the new log entry
+        current_logs.append({
+            **log_entry,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # Keep only the most recent 1000 log entries
+        current_logs = current_logs[-1000:]
+        
+        self.set(log_key, current_logs)
+        
+        # Update workflow status based on log entry
+        if 'level' in log_entry:
+            status = self._determine_status_from_log(log_entry['level'])
+            if status:
+                self.set(f'workflows.{workflow_id}.data.status', status)
+    
+    def _determine_status_from_log(self, log_level: str) -> Optional[str]:
+        """
+        Determine workflow status from log level.
+        
+        Args:
+            log_level: Log level (ERROR, WARNING, INFO, DEBUG)
+            
+        Returns:
+            Status string or None if status shouldn't change
+        """
+        level = log_level.upper()
+        if level in ['ERROR', 'FATAL', 'CRITICAL']:
+            return 'FAILED'
+        elif level in ['WARNING']:
+            return 'WARNING'
+        return None
