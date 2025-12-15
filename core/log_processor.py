@@ -11,8 +11,8 @@ from typing import List, Dict, Any, Optional, Callable, Generator
 from datetime import datetime
 import logging
 from collections import deque
-from ..utils.file_utils import FileUtils
-from ..config.settings import Settings
+from utils.file_utils import FileUtils
+from config.settings import Settings
 
 
 class LogProcessingError(Exception):

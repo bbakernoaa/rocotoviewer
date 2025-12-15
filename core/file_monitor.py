@@ -14,7 +14,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import logging
 from collections import defaultdict
-from ..utils.file_utils import FileUtils
+from utils.file_utils import FileUtils
 
 
 class WorkflowFileHandler(FileSystemEventHandler):
