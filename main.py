@@ -93,11 +93,10 @@ def run_app(config_path: Optional[Path] = None, workflow_path: Optional[Path] = 
         # Load workflow if provided
         if workflow_path:
             try:
-                workflow_data = workflow_parser.parse(str(workflow_path))
-                workflow_id = workflow_data.get('id', 'unknown')
-                
-                # Update state with new workflow
-                state_manager.update_workflow(workflow_id, workflow_data)
+                workflow = workflow_parser.parse(str(workflow_path))
+                if workflow:
+                    # Update state with new workflow object
+                    state_manager.update_workflow(workflow.id, workflow)
             except Exception as e:
                 logging.error(f"Error loading workflow {workflow_path}: {str(e)}")
         
@@ -223,22 +222,19 @@ def run_parse(config_path: Optional[Path] = None, workflow_path: Optional[Path] 
         
         # Parse the workflow
         parser = WorkflowParser(config)
-        workflow_data = parser.parse(str(workflow_path))
-        
+        workflow = parser.parse(str(workflow_path))
+
+        if not workflow:
+            logging.error(f"Failed to parse workflow: {workflow_path}")
+            return 1
+
+        # Convert workflow to dict for output and field extraction
+        from dataclasses import asdict
+        workflow_data = asdict(workflow)
+
         # Extract specific fields if requested
         if extract_fields:
-            extracted_data = {}
-            for field in extract_fields:
-                if field in workflow_data:
-                    extracted_data[field] = workflow_data[field]
-                elif field == 'tasks':
-                    extracted_data['tasks'] = workflow_data.get('tasks', [])
-                elif field == 'cycles':
-                    extracted_data['cycles'] = workflow_data.get('cycles', [])
-                elif field == 'resources':
-                    extracted_data['resources'] = workflow_data.get('resources', [])
-                elif field == 'dependencies':
-                    extracted_data['dependencies'] = workflow_data.get('dependencies', [])
+            extracted_data = {field: workflow_data.get(field) for field in extract_fields}
         else:
             extracted_data = workflow_data
         
@@ -250,11 +246,9 @@ def run_parse(config_path: Optional[Path] = None, workflow_path: Optional[Path] 
                 elif output_format == 'yaml':
                     yaml.dump(extracted_data, f, default_flow_style=False)
                 elif output_format == 'text':
-                    f.write(f"Workflow: {workflow_data.get('id', 'unknown')}\n")
-                    f.write(f"Name: {workflow_data.get('name', 'N/A')}\n")
-                    f.write(f"Tasks: {len(workflow_data.get('tasks', []))}\n")
-                    f.write(f"Cycles: {len(workflow_data.get('cycles', []))}\n")
-                    f.write(f"Resources: {len(workflow_data.get('resources', []))}\n")
+                    f.write(f"Workflow: {workflow.id}\n")
+                    f.write(f"Name: {workflow.name}\n")
+                    f.write(f"Tasks: {len(workflow.tasks)}\n")
         else:
             # Print to stdout
             if output_format == 'json':
@@ -262,11 +256,9 @@ def run_parse(config_path: Optional[Path] = None, workflow_path: Optional[Path] 
             elif output_format == 'yaml':
                 print(yaml.dump(extracted_data, default_flow_style=False))
             elif output_format == 'text':
-                print(f"Workflow: {workflow_data.get('id', 'unknown')}")
-                print(f"Name: {workflow_data.get('name', 'N/A')}")
-                print(f"Tasks: {len(workflow_data.get('tasks', []))}")
-                print(f"Cycles: {len(workflow_data.get('cycles', []))}")
-                print(f"Resources: {len(workflow_data.get('resources', []))}")
+                print(f"Workflow: {workflow.id}")
+                print(f"Name: {workflow.name}")
+                print(f"Tasks: {len(workflow.tasks)}")
         
         return 0
         
@@ -304,23 +296,21 @@ def run_stats(config_path: Optional[Path] = None, workflow_path: Optional[Path] 
         workflow_parser = WorkflowParser(config)
         
         # If specific workflow path(s) are provided, parse them
-        workflows = {}
+        workflows = []
         if workflow_path:
             # Handle single workflow path
-            workflow_data = workflow_parser.parse(str(workflow_path))
-            workflow_id = workflow_data.get('id', 'unknown')
-            state_manager.update_workflow(workflow_id, workflow_data)
-            workflows[workflow_id] = state_manager.get_workflow(workflow_id)
+            workflow = workflow_parser.parse(str(workflow_path))
+            if workflow:
+                workflows.append(workflow)
         else:
             # Use workflows from config
             for wf_config in config.workflows:
                 wf_path = Path(wf_config['path'])
                 if wf_path.exists() and wf_path.is_file():
-                    wf_data = workflow_parser.parse(str(wf_path))
-                    wf_id = wf_data.get('id', wf_path.stem)
-                    state_manager.update_workflow(wf_id, wf_data)
-                    workflows[wf_id] = state_manager.get_workflow(wf_id)
-        
+                    workflow = workflow_parser.parse(str(wf_path))
+                    if workflow:
+                        workflows.append(workflow)
+
         # Calculate statistics
         total_workflows = len(workflows)
         total_tasks = 0
@@ -328,17 +318,15 @@ def run_stats(config_path: Optional[Path] = None, workflow_path: Optional[Path] 
         total_cycles = 0
         total_resources = 0
         
-        for wf_id, wf_data in workflows.items():
-            wf_tasks = wf_data.get('data', {}).get('tasks', [])
-            total_tasks += len(wf_tasks)
+        for workflow in workflows:
+            total_tasks += len(workflow.tasks)
+            total_cycles += len(workflow.cycles)
+            total_resources += len(workflow.resources)
             
             # Count task statuses
-            for task in wf_tasks:
-                status = task.get('status', 'unknown').lower()
+            for task in workflow.tasks:
+                status = task.attributes.get('status', 'unknown').lower()
                 status_counts[status] = status_counts.get(status, 0) + 1
-            
-            total_cycles += len(wf_data.get('data', {}).get('cycles', []))
-            total_resources += len(wf_data.get('data', {}).get('resources', []))
         
         stats = {
             'timestamp': datetime.now().isoformat(),

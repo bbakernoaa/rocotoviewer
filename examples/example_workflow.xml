@@ -18,9 +18,11 @@
   </resources>
 
   <tasks>
-    <task name="task1" cycledefs="first">
+    <task name="task1" cycledefs="first" status="QUEUED">
       <!-- Task 1 definition -->
       <command>/path/to/script1.sh</command>
+      <walltime>00:10:00</walltime>
+      <queue>debug</queue>
       <envar name="TASK_ID" value="task1"/>
       <dependency>
         <cyclestr>@Y@m@d@H</cyclestr>
