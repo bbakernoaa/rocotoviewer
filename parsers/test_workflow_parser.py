@@ -45,9 +45,10 @@ class TestWorkflowParser(unittest.TestCase):
         self.assertEqual(task1.id, "task1")
         self.assertEqual(task1.command, "/path/to/script1.sh")
         self.assertEqual(len(task1.dependencies), 1)
+        self.assertEqual(task1.dependencies[0].type, 'dependency')
         self.assertEqual(len(task1.envars), 1)
-        self.assertEqual(task1.envars[0]['name'], 'TASK_ID')
-        self.assertEqual(task1.envars[0]['value'], 'task1')
+        self.assertEqual(task1.envars[0].name, 'TASK_ID')
+        self.assertEqual(task1.envars[0].value, 'task1')
 
         # Assertions for the newly added nested tags
         self.assertEqual(task1.attributes.get('status'), 'QUEUED')
