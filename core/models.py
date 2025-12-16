@@ -5,14 +5,51 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
 @dataclass
+class Dependency:
+    """
+    Represents a task dependency.
+    """
+    type: str
+    attributes: Dict[str, Any] = field(default_factory=dict)
+    text: str = ""
+
+
+@dataclass
+class Envar:
+    """
+    Represents an environment variable for a task.
+    """
+    name: str
+    value: str
+
+
+@dataclass
+class Cycle:
+    """
+    Represents a cycle definition in a workflow.
+    """
+    group: Optional[str]
+    text: str
+
+
+@dataclass
+class Resource:
+    """
+    Represents a resource in a workflow's resource pool.
+    """
+    key: Optional[str]
+    value: Optional[str]
+
+
+@dataclass
 class Task:
     """
     Represents a task in a Rocoto workflow.
     """
     id: str
     command: str = ""
-    dependencies: List[Dict[str, Any]] = field(default_factory=list)
-    envars: List[Dict[str, str]] = field(default_factory=list)
+    dependencies: List[Dependency] = field(default_factory=list)
+    envars: List[Envar] = field(default_factory=list)
     attributes: Dict[str, Any] = field(default_factory=dict)
     visualization: Dict[str, Any] = field(default_factory=dict)
 
@@ -26,8 +63,8 @@ class Workflow:
     description: str = ""
     tasks: List[Task] = field(default_factory=list)
     source_file: str = ""
-    cycles: List[Dict[str, Any]] = field(default_factory=list)
-    resources: List[Dict[str, Any]] = field(default_factory=list)
+    cycles: List[Cycle] = field(default_factory=list)
+    resources: List[Resource] = field(default_factory=list)
     dependencies: List[Dict[str, Any]] = field(default_factory=list)
     timeline: Dict[str, Any] = field(default_factory=dict)
     task_groups: List[Dict[str, Any]] = field(default_factory=list)
