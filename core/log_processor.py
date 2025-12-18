@@ -45,6 +45,10 @@ class StreamingLogProcessor:
         
         # Common log patterns for Rocoto workflows
         self.patterns = Settings().LOG_PATTERNS
+        self.compiled_patterns = {
+            key: re.compile(pattern, re.IGNORECASE) if key == 'task_status' else re.compile(pattern)
+            for key, pattern in self.patterns.items()
+        }
         
         # Buffer for streaming logs
         self.stream_buffers: Dict[Path, deque] = {}
@@ -203,7 +207,7 @@ class StreamingLogProcessor:
         }
         
         # Extract timestamp
-        timestamp_match = re.search(self.patterns['timestamp'], line)
+        timestamp_match = self.compiled_patterns['timestamp'].search(line)
         if timestamp_match:
             try:
                 result['timestamp'] = datetime.strptime(timestamp_match.group(), '%Y-%m-%d %H:%M:%S')
@@ -215,19 +219,19 @@ class StreamingLogProcessor:
                     pass  # If timestamp format is unexpected, leave as None
         
         # Extract task ID
-        task_match = re.search(self.patterns['task_id'], line)
+        task_match = self.compiled_patterns['task_id'].search(line)
         if not task_match:
-            task_match = re.search(self.patterns['rocoto_task'], line)
+            task_match = self.compiled_patterns['rocoto_task'].search(line)
         if task_match:
             result['task_id'] = task_match.group(1) if len(task_match.groups()) > 0 else task_match.group()
         
         # Extract cycle info
-        cycle_match = re.search(self.patterns['cycle_info'], line)
+        cycle_match = self.compiled_patterns['cycle_info'].search(line)
         if cycle_match:
             result['cycle'] = cycle_match.group(1)
         
         # Extract status
-        status_match = re.search(self.patterns['task_status'], line, re.IGNORECASE)
+        status_match = self.compiled_patterns['task_status'].search(line)
         if status_match:
             result['status'] = status_match.group()
         
