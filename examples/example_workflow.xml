@@ -18,7 +18,7 @@
   </resources>
 
   <tasks>
-    <task name="task1" cycledefs="first" status="QUEUED">
+    <task name="task1" cycledefs="first" status="QUEUED" start_time="2023-01-01T00:00:00Z">
       <!-- Task 1 definition -->
       <command>/path/to/script1.sh</command>
       <walltime>00:10:00</walltime>
