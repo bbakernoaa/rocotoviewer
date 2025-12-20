@@ -1,0 +1,11 @@
+
+<workflow>
+    <taskdef name="legacy_task_def">
+        <command>/bin/echo 'legacy'</command>
+    </taskdef>
+    <task name="task1">
+        <dependency>
+            <taskdep task="task0"/>
+        </dependency>
+    </task>
+</workflow>
