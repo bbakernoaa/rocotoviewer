@@ -1,10 +1,12 @@
 """
 Tests for the refactored WorkflowParser.
 """
+
 import unittest
 from pathlib import Path
 from .workflow_parser import WorkflowParser
 from core.models import Workflow, Task
+
 
 class TestWorkflowParser(unittest.TestCase):
     """
@@ -45,15 +47,15 @@ class TestWorkflowParser(unittest.TestCase):
         self.assertEqual(task1.id, "task1")
         self.assertEqual(task1.command, "/path/to/script1.sh")
         self.assertEqual(len(task1.dependencies), 1)
-        self.assertEqual(task1.dependencies[0].type, 'dependency')
+        self.assertEqual(task1.dependencies[0].type, "dependency")
         self.assertEqual(len(task1.envars), 1)
-        self.assertEqual(task1.envars[0].name, 'TASK_ID')
-        self.assertEqual(task1.envars[0].value, 'task1')
+        self.assertEqual(task1.envars[0].name, "TASK_ID")
+        self.assertEqual(task1.envars[0].value, "task1")
 
         # Assertions for the newly added nested tags
-        self.assertEqual(task1.attributes.get('status'), 'QUEUED')
-        self.assertEqual(task1.attributes.get('walltime'), '00:10:00')
-        self.assertEqual(task1.attributes.get('queue'), 'debug')
+        self.assertEqual(task1.attributes.get("status"), "QUEUED")
+        self.assertEqual(task1.attributes.get("walltime"), "00:10:00")
+        self.assertEqual(task1.attributes.get("queue"), "debug")
 
     def test_single_pass_parsing_logic(self):
         """
@@ -62,9 +64,9 @@ class TestWorkflowParser(unittest.TestCase):
         workflow = self.parser.parse(self.sample_workflow_path)
         self.assertIsNotNone(workflow)
         self.assertGreater(len(workflow.dependencies), 0)
-        self.assertIsNotNone(workflow.timeline['earliest_start'])
+        self.assertIsNotNone(workflow.timeline["earliest_start"])
         self.assertGreater(len(workflow.task_groups), 0)
-        self.assertGreater(workflow.statistics['total_tasks'], 0)
+        self.assertGreater(workflow.statistics["total_tasks"], 0)
 
     def test_legacy_workflow_parsing(self):
         """
@@ -75,7 +77,8 @@ class TestWorkflowParser(unittest.TestCase):
         )
         # Create a dummy legacy workflow file for testing
         with open(legacy_workflow_path, "w") as f:
-            f.write("""
+            f.write(
+                """
 <workflow>
     <taskdef name="legacy_task_def">
         <command>/bin/echo 'legacy'</command>
@@ -86,7 +89,8 @@ class TestWorkflowParser(unittest.TestCase):
         </dependency>
     </task>
 </workflow>
-            """)
+            """
+            )
 
         workflow = self.parser.parse(legacy_workflow_path)
         self.assertIsNotNone(workflow)
@@ -97,11 +101,12 @@ class TestWorkflowParser(unittest.TestCase):
         # parser doesn't create tasks from taskdefs, we will just check the legacy flag.
         # This test will need to be updated once the legacy logic is fully implemented.
         is_legacy_detected = any(
-            group['name'] == 'legacy_task_def' for group in workflow.task_groups
-        ) or any(
-            'taskdef' in task.id for task in workflow.tasks
+            group["name"] == "legacy_task_def" for group in workflow.task_groups
+        ) or any("taskdef" in task.id for task in workflow.tasks)
+        self.assertFalse(
+            is_legacy_detected,
+            "Legacy taskdef should not be parsed as a task group or task in the current implementation",
         )
-        self.assertFalse(is_legacy_detected, "Legacy taskdef should not be parsed as a task group or task in the current implementation")
 
 
 if __name__ == "__main__":

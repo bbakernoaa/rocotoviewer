@@ -4,6 +4,7 @@ Workflow parser module for RocotoViewer.
 This module parses Rocoto workflow XML files and extracts structured data
 using the standard library's ElementTree for performance and dataclasses for a clean data model.
 """
+
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -53,50 +54,60 @@ class WorkflowParser(BaseParser):
         """
         Detect if the workflow XML is in a legacy format.
         """
-        return root.find('taskdef') is not None
+        return root.find("taskdef") is not None
 
-    def _parse_and_enhance_workflow(self, root: ET.Element, source: str, is_legacy: bool) -> Workflow:
+    def _parse_and_enhance_workflow(
+        self, root: ET.Element, source: str, is_legacy: bool
+    ) -> Workflow:
         """
         Parse the workflow XML and enhance it with visualization data in a single pass.
         """
-        workflow_id = root.get('workflowid', Path(source).stem)
-        workflow_name = root.get('name', workflow_id)
-        description_element = root.find('description')
-        description = description_element.text.strip() if description_element is not None and description_element.text else ""
+        workflow_id = root.get("workflowid", Path(source).stem)
+        workflow_name = root.get("name", workflow_id)
+        description_element = root.find("description")
+        description = (
+            description_element.text.strip()
+            if description_element is not None and description_element.text
+            else ""
+        )
 
         tasks, cycles, resources, start_times, end_times = [], [], [], [], []
         task_groups = defaultdict(list)
 
-        task_elements = root.findall('task') + root.findall('tasks/task')
+        task_elements = root.findall("task") + root.findall("tasks/task")
         if is_legacy:
             # Add logic to find tasks in legacy format, if different
             pass
 
         for i, task_element in enumerate(task_elements):
             task = self._create_task_from_element(task_element)
-            task.visualization['position'] = {'x': (i % 5) * 10, 'y': (i // 5) * 50}
+            task.visualization["position"] = {"x": (i % 5) * 10, "y": (i // 5) * 50}
             tasks.append(task)
 
-            self._extract_and_append_time(task, 'start_time', start_times)
-            self._extract_and_append_time(task, 'end_time', end_times)
+            self._extract_and_append_time(task, "start_time", start_times)
+            self._extract_and_append_time(task, "end_time", end_times)
 
-            status = task.attributes.get('status', 'unknown')
+            status = task.attributes.get("status", "unknown")
             task_groups[status].append(task.id)
 
         dependencies = [
-            {'source': task.id, 'target': dep.attributes.get('task', 'unknown')}
-            for task in tasks for dep in task.dependencies
+            {"source": task.id, "target": dep.attributes.get("task", "unknown")}
+            for task in tasks
+            for dep in task.dependencies
         ]
 
-        for cycle_element in root.findall('cycledef'):
+        for cycle_element in root.findall("cycledef"):
             cycles.append(self._create_cycle_from_element(cycle_element))
 
-        for resource_element in root.findall('resources/pool/entry'):
+        for resource_element in root.findall("resources/pool/entry"):
             resources.append(self._create_resource_from_element(resource_element))
 
         timeline = self._calculate_timeline(start_times, end_times)
 
-        formatted_task_groups = [{'name': name, 'tasks': tasks_list} for name, tasks_list in task_groups.items()]
+        formatted_task_groups = [
+            {"name": name, "tasks": tasks_list}
+            for name, tasks_list in task_groups.items()
+        ]
 
         workflow = Workflow(
             id=workflow_id,
@@ -113,12 +124,14 @@ class WorkflowParser(BaseParser):
         workflow.statistics = self._calculate_statistics(workflow)
         return workflow
 
-    def _extract_and_append_time(self, task: Task, time_attribute: str, time_list: list) -> None:
+    def _extract_and_append_time(
+        self, task: Task, time_attribute: str, time_list: list
+    ) -> None:
         """Extracts, parses, and appends a time attribute from a task to a list."""
         time_str = task.attributes.get(time_attribute)
         if time_str:
             try:
-                time_dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+                time_dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
                 time_list.append(time_dt)
             except ValueError:
                 self.logger.warning(f"Could not parse datetime string: {time_str}")
@@ -127,7 +140,7 @@ class WorkflowParser(BaseParser):
         """
         Create a Task object from an XML element, capturing all nested tag data.
         """
-        task_id = task_element.get('name', task_element.get('id', ''))
+        task_id = task_element.get("name", task_element.get("id", ""))
         command = ""
         dependencies = []
         envars = []
@@ -135,14 +148,14 @@ class WorkflowParser(BaseParser):
 
         for child in task_element:
             tag = child.tag.lower()
-            if tag == 'command':
+            if tag == "command":
                 command = child.text.strip() if child.text else ""
-            elif tag == 'dependency':
+            elif tag == "dependency":
                 dependencies.append(self._create_dependency_from_element(child))
-            elif tag == 'envar':
+            elif tag == "envar":
                 envars.append(self._create_envar_from_element(child))
             elif child.text and child.text.strip():
-                 attributes[child.tag] = child.text.strip()
+                attributes[child.tag] = child.text.strip()
 
         return Task(
             id=task_id,
@@ -159,7 +172,7 @@ class WorkflowParser(BaseParser):
         return Dependency(
             type=dep_element.tag,
             attributes=dict(dep_element.attrib),
-            text=dep_element.text.strip() if dep_element.text else ""
+            text=dep_element.text.strip() if dep_element.text else "",
         )
 
     def _create_envar_from_element(self, envar_element: ET.Element) -> Envar:
@@ -167,8 +180,8 @@ class WorkflowParser(BaseParser):
         Create an Envar object from an XML element.
         """
         return Envar(
-            name=envar_element.get('name', ''),
-            value=envar_element.get('value', envar_element.text or ''),
+            name=envar_element.get("name", ""),
+            value=envar_element.get("value", envar_element.text or ""),
         )
 
     def _create_cycle_from_element(self, cycle_element: ET.Element) -> Cycle:
@@ -176,8 +189,8 @@ class WorkflowParser(BaseParser):
         Create a Cycle object from a cycledef XML element.
         """
         return Cycle(
-            group=cycle_element.get('group'),
-            text=cycle_element.text.strip() if cycle_element.text else ""
+            group=cycle_element.get("group"),
+            text=cycle_element.text.strip() if cycle_element.text else "",
         )
 
     def _create_resource_from_element(self, resource_element: ET.Element) -> Resource:
@@ -185,35 +198,34 @@ class WorkflowParser(BaseParser):
         Create a Resource object from a resource pool entry XML element.
         """
         return Resource(
-            key=resource_element.get('key'),
-            value=resource_element.get('value')
+            key=resource_element.get("key"), value=resource_element.get("value")
         )
 
-    def _calculate_timeline(self, start_times: List[datetime], end_times: List[datetime]) -> Dict[str, Any]:
+    def _calculate_timeline(
+        self, start_times: List[datetime], end_times: List[datetime]
+    ) -> Dict[str, Any]:
         """
         Calculate timeline information from pre-parsed datetime lists.
         """
-        timeline = {
-            'earliest_start': None,
-            'latest_end': None,
-            'total_duration': 0
-        }
-        
+        timeline = {"earliest_start": None, "latest_end": None, "total_duration": 0}
+
         if start_times:
-            timeline['earliest_start'] = min(start_times).isoformat()
-        
+            timeline["earliest_start"] = min(start_times).isoformat()
+
         if end_times:
-            timeline['latest_end'] = max(end_times).isoformat()
-        
-        if timeline['earliest_start'] and timeline['latest_end']:
+            timeline["latest_end"] = max(end_times).isoformat()
+
+        if timeline["earliest_start"] and timeline["latest_end"]:
             try:
-                start_dt = datetime.fromisoformat(timeline['earliest_start'])
-                end_dt = datetime.fromisoformat(timeline['latest_end'])
-                timeline['total_duration'] = (end_dt - start_dt).total_seconds()
+                start_dt = datetime.fromisoformat(timeline["earliest_start"])
+                end_dt = datetime.fromisoformat(timeline["latest_end"])
+                timeline["total_duration"] = (end_dt - start_dt).total_seconds()
             except ValueError:
-                self.logger.warning("Could not calculate total_duration due to ISO format error.")
+                self.logger.warning(
+                    "Could not calculate total_duration due to ISO format error."
+                )
                 pass
-        
+
         return timeline
 
     def _calculate_statistics(self, workflow: Workflow) -> Dict[str, Any]:
@@ -221,7 +233,7 @@ class WorkflowParser(BaseParser):
         Calculate statistics for the workflow.
         """
         return {
-            'total_tasks': len(workflow.tasks),
-            'dependency_count': len(workflow.dependencies),
-            'task_groups_count': len(workflow.task_groups),
+            "total_tasks": len(workflow.tasks),
+            "dependency_count": len(workflow.dependencies),
+            "task_groups_count": len(workflow.task_groups),
         }

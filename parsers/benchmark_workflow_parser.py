@@ -10,6 +10,7 @@ sys.path.insert(0, str(project_root))
 
 from parsers.workflow_parser import WorkflowParser
 
+
 def generate_large_xml_content(num_tasks: int) -> str:
     """Generates a large XML string with a specified number of tasks."""
     tasks_xml = []
@@ -39,13 +40,15 @@ def generate_large_xml_content(num_tasks: int) -> str:
 </workflow>
 """
 
+
 def create_test_xml_file(num_tasks: int = 500):
     """Creates a temporary XML file with a specified number of tasks."""
     fd, path = tempfile.mkstemp(suffix=".xml")
-    with os.fdopen(fd, 'w') as f:
+    with os.fdopen(fd, "w") as f:
         xml_content = generate_large_xml_content(num_tasks)
         f.write(xml_content)
     return path
+
 
 def run_benchmark(xml_path: str, title: str):
     """Runs the benchmark for the WorkflowParser."""
@@ -58,6 +61,7 @@ def run_benchmark(xml_path: str, title: str):
     print(f"Total time for {iterations} iterations: {total_time:.4f} seconds")
     print(f"Average time per parse: {avg_time * 1e3:.2f} milliseconds")
 
+
 def main():
     """Main function to run the benchmark."""
     xml_file_path = None
@@ -67,6 +71,7 @@ def main():
     finally:
         if xml_file_path and os.path.exists(xml_file_path):
             os.remove(xml_file_path)
+
 
 if __name__ == "__main__":
     main()
