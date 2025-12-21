@@ -172,95 +172,69 @@ class WorkflowParser(BaseParser):
 
     def _enhance_with_visualization_data(self, workflow: Workflow) -> None:
         """
-        Enhance workflow data with visualization-specific information.
+        Enhance workflow data with visualization-specific information in a single pass.
+        This method consolidates multiple loops into one for performance.
         """
-        workflow.dependencies = self._calculate_dependencies(workflow.tasks)
-        workflow.timeline = self._calculate_timeline(workflow.tasks)
-        workflow.task_groups = self._calculate_task_groups(workflow.tasks)
-        workflow.statistics = self._calculate_statistics(workflow)
-        for i, task in enumerate(workflow.tasks):
-            task.visualization['position'] = {'x': (i % 5) * 10, 'y': (i // 5) * 50}
-
-    def _calculate_dependencies(self, tasks: List[Task]) -> List[Dict[str, Any]]:
-        """
-        Calculate task dependencies from the task data.
-        """
-        # This is a simplified version of the original logic
         dependencies = []
-        for task in tasks:
+        start_times = []
+        end_times = []
+        task_groups_map = {}
+
+        for i, task in enumerate(workflow.tasks):
+            # 1. Calculate dependencies
             for dep in task.dependencies:
                 dependencies.append({
                     'source': task.id,
                     'target': dep.attributes.get('task', 'unknown'),
                 })
-        return dependencies
 
-    def _calculate_timeline(self, tasks: List[Task]) -> Dict[str, Any]:
-        """
-        Calculate timeline information for tasks.
-        """
-        timeline = {
-            'earliest_start': None,
-            'latest_end': None,
-            'total_duration': 0,
-            'tasks_by_time': []
-        }
-        
-        start_times = []
-        end_times = []
-        
-        for task in tasks:
+            # 2. Collect timeline data
             start_time = task.attributes.get('start_time')
-            end_time = task.attributes.get('end_time')
-            
             if start_time:
                 try:
                     start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
                     start_times.append(start_dt)
-                except:
-                    pass
-            
+                except ValueError:
+                    self.logger.warning(f"Invalid start_time format for task {task.id}: {start_time}")
+
+            end_time = task.attributes.get('end_time')
             if end_time:
                 try:
                     end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
                     end_times.append(end_dt)
-                except:
-                    pass
-        
-        if start_times:
-            timeline['earliest_start'] = min(start_times).isoformat()
-        
-        if end_times:
-            timeline['latest_end'] = max(end_times).isoformat()
-        
+                except ValueError:
+                    self.logger.warning(f"Invalid end_time format for task {task.id}: {end_time}")
+
+            # 3. Group tasks by status
+            status = task.attributes.get('status', 'unknown')
+            if status not in task_groups_map:
+                task_groups_map[status] = []
+            task_groups_map[status].append(task.id)
+
+            # 4. Set visualization position
+            task.visualization['position'] = {'x': (i % 5) * 10, 'y': (i // 5) * 50}
+
+        # Finalize and set workflow attributes
+        workflow.dependencies = dependencies
+        workflow.task_groups = [{'name': name, 'tasks': tasks} for name, tasks in task_groups_map.items()]
+
+        # Finalize timeline
+        timeline = {
+            'earliest_start': min(start_times).isoformat() if start_times else None,
+            'latest_end': max(end_times).isoformat() if end_times else None,
+            'total_duration': 0,
+        }
         if timeline['earliest_start'] and timeline['latest_end']:
             try:
                 start_dt = datetime.fromisoformat(timeline['earliest_start'].replace('Z', '+00:00'))
                 end_dt = datetime.fromisoformat(timeline['latest_end'].replace('Z', '+00:00'))
                 timeline['total_duration'] = (end_dt - start_dt).total_seconds()
-            except:
-                pass
-        
-        return timeline
+            except ValueError:
+                pass # Already logged warnings
+        workflow.timeline = timeline
 
-    def _calculate_task_groups(self, tasks: List[Task]) -> List[Dict[str, Any]]:
-        """
-        Group tasks based on common attributes.
-        """
-        groups = {}
-        for task in tasks:
-            status = task.attributes.get('status', 'unknown')
-            if status not in groups:
-                groups[status] = []
-            groups[status].append(task.id)
-        
-        return [{'name': name, 'tasks': tasks} for name, tasks in groups.items()]
-
-    def _calculate_statistics(self, workflow: Workflow) -> Dict[str, Any]:
-        """
-        Calculate statistics for the workflow.
-        """
-        return {
+        # Finalize statistics
+        workflow.statistics = {
             'total_tasks': len(workflow.tasks),
             'dependency_count': len(workflow.dependencies),
             'task_groups_count': len(workflow.task_groups),
