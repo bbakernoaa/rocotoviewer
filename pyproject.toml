@@ -67,7 +67,7 @@ Download = "https://pypi.org/project/rocotoviewer/#files"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rocotoviewer*"]
+include = ["core", "parsers", "ui", "utils", "config"]
 
 [tool.setuptools.package-data]
 rocotoviewer = ["examples/*.xml", "examples/*.yaml", "docs/*.md"]
