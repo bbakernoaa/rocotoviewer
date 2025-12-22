@@ -4,6 +4,9 @@ Command Line Interface for RocotoViewer.
 This module provides a CLI for launching the viewer, monitoring workflows,
 and performing various operations from the command line with comprehensive
 argument parsing and mode support.
+
+This module provides the primary application interface and can be used
+to launch the UI or run in headless mode for monitoring workflows.
 """
 
 import click
@@ -14,9 +17,13 @@ from pathlib import Path
 from typing import Optional, List
 import os
 
-from .main import run_app, run_monitor, run_parse, run_stats, run_config_commands
 from .__version__ import __version__
 from .config.config import Config
+from .core.commands.config_cmd import run_config_commands
+from .core.commands.monitor import run_monitor
+from .core.commands.parse import run_parse
+from .core.commands.stats import run_stats
+from .core.commands.view import run_app
 
 
 @click.group(invoke_without_command=True, help="RocotoViewer - A powerful viewer for Rocoto workflow management systems.")
