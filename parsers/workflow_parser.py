@@ -29,23 +29,22 @@ class WorkflowParser(BaseParser):
 
     def parse(self, source: str) -> Optional[Workflow]:
         """
-        Parse a Rocoto workflow XML file into a Workflow object.
+        Parse a Rocoto workflow XML file into a Workflow object using a memory-efficient,
+        single-pass approach with iterparse.
+
+        Why iterparse?
+        While ET.parse() can be faster for small files, this implementation prioritizes
+        memory efficiency and scalability for large workflows. The single-pass approach
+        also improves code clarity by consolidating data processing into one loop,
+        avoiding a second pass over the task list to generate visualization data.
         """
         if not self.validate_source(source):
             self.logger.warning(f"Invalid or non-existent source file: {source}")
             return None
 
         try:
-            tree = ET.parse(source)
-            root = tree.getroot()
-
-            workflow = self._parse_workflow_xml(root, source)
-
-            if self._is_legacy(root):
-                workflow = self._parse_legacy_workflow_xml(root, source)
-
-            self._enhance_with_visualization_data(workflow)
-
+            workflow = self._parse_workflow_with_iterparse(source)
+            self._finalize_workflow_data(workflow)
             return workflow
 
         except ET.ParseError as e:
@@ -55,36 +54,42 @@ class WorkflowParser(BaseParser):
             self.logger.error(f"Unexpected error parsing workflow {source}: {e}")
             return None
 
-    def _is_legacy(self, root: ET.Element) -> bool:
+    def _parse_workflow_with_iterparse(self, source: str) -> Workflow:
         """
-        Detect if the workflow XML is in a legacy format.
+        Parse the workflow XML using iterparse for a memory-efficient single pass.
         """
-        return root.find('taskdef') is not None
+        tasks = []
+        cycles = []
+        resources = []
+        task_groups_map = {}
+        start_times = []
+        end_times = []
+        workflow_dependencies = []
 
-    def _parse_workflow_xml(self, root: ET.Element, source: str) -> Workflow:
-        """
-        Parse the workflow XML and extract structured data in a single pass.
-        """
+        context = ET.iterparse(source, events=('start', 'end'))
+        _, root = next(context)  # Get the root element
+
         workflow_id = root.get('workflowid', Path(source).stem)
         workflow_name = root.get('name', workflow_id)
         description_element = root.find('description')
         description = description_element.text.strip() if description_element is not None and description_element.text else ""
 
-        tasks = []
-        cycles = []
-        resources = []
+        is_legacy = self._is_legacy(root)
 
-        for element in root:
-            if element.tag == 'task':
-                tasks.append(self._create_task_from_element(element))
-            elif element.tag == 'tasks':
-                for task_element in element:
-                    tasks.append(self._create_task_from_element(task_element))
-            elif element.tag == 'cycledef':
-                cycles.append(self._create_cycle_from_element(element))
-            elif element.tag == 'resources':
-                for pool in element.findall('pool/entry'):
-                    resources.append(self._create_resource_from_element(pool))
+        for event, element in context:
+            if event == 'end':
+                tag = element.tag
+                if tag == 'task' or (is_legacy and tag == 'taskdef'):
+                    task = self._create_task_from_element(element)
+                    tasks.append(task)
+                    self._update_visualization_data(task, len(tasks) - 1, task_groups_map, start_times, end_times, workflow_dependencies)
+                    root.clear() # Free memory
+                elif tag == 'cycledef':
+                    cycles.append(self._create_cycle_from_element(element))
+                elif tag == 'pool' and element.find('entry') is not None:
+                     for entry in element.findall('entry'):
+                        resources.append(self._create_resource_from_element(entry))
+
 
         return Workflow(
             id=workflow_id,
@@ -94,15 +99,16 @@ class WorkflowParser(BaseParser):
             tasks=tasks,
             cycles=cycles,
             resources=resources,
+            dependencies=workflow_dependencies,
+            task_groups=[{'name': name, 'tasks': ts} for name, ts in task_groups_map.items()],
+            timeline={'start_times': start_times, 'end_times': end_times}
         )
 
-    def _parse_legacy_workflow_xml(self, root: ET.Element, source: str) -> Workflow:
+    def _is_legacy(self, root: ET.Element) -> bool:
         """
-        Parse legacy workflow XML format.
+        Detect if the workflow XML is in a legacy format.
         """
-        workflow = self._parse_workflow_xml(root, source)
-        # Add any legacy-specific parsing logic here
-        return workflow
+        return root.find('taskdef') is not None
 
     def _create_task_from_element(self, task_element: ET.Element) -> Task:
         """
@@ -170,70 +176,64 @@ class WorkflowParser(BaseParser):
             value=resource_element.get('value')
         )
 
-    def _enhance_with_visualization_data(self, workflow: Workflow) -> None:
+    def _update_visualization_data(self, task: Task, task_index: int, task_groups_map: Dict, start_times: List, end_times: List, workflow_dependencies: List) -> None:
         """
-        Enhance workflow data with visualization-specific information in a single pass.
-        This method consolidates multiple loops into one for performance.
+        Update visualization data collections in-place during the parsing loop.
         """
-        dependencies = []
-        start_times = []
-        end_times = []
-        task_groups_map = {}
+        # 1. Calculate dependencies
+        for dep in task.dependencies:
+            workflow_dependencies.append({
+                'source': task.id,
+                'target': dep.attributes.get('task', 'unknown'),
+            })
 
-        for i, task in enumerate(workflow.tasks):
-            # 1. Calculate dependencies
-            for dep in task.dependencies:
-                dependencies.append({
-                    'source': task.id,
-                    'target': dep.attributes.get('task', 'unknown'),
-                })
+        # 2. Collect timeline data
+        start_time = task.attributes.get('start_time')
+        if start_time:
+            try:
+                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                start_times.append(start_dt)
+            except ValueError:
+                self.logger.warning(f"Invalid start_time format for task {task.id}: {start_time}")
 
-            # 2. Collect timeline data
-            start_time = task.attributes.get('start_time')
-            if start_time:
-                try:
-                    start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                    start_times.append(start_dt)
-                except ValueError:
-                    self.logger.warning(f"Invalid start_time format for task {task.id}: {start_time}")
+        end_time = task.attributes.get('end_time')
+        if end_time:
+            try:
+                end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                end_times.append(end_dt)
+            except ValueError:
+                self.logger.warning(f"Invalid end_time format for task {task.id}: {end_time}")
 
-            end_time = task.attributes.get('end_time')
-            if end_time:
-                try:
-                    end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
-                    end_times.append(end_dt)
-                except ValueError:
-                    self.logger.warning(f"Invalid end_time format for task {task.id}: {end_time}")
+        # 3. Group tasks by status
+        status = task.attributes.get('status', 'unknown')
+        if status not in task_groups_map:
+            task_groups_map[status] = []
+        task_groups_map[status].append(task.id)
 
-            # 3. Group tasks by status
-            status = task.attributes.get('status', 'unknown')
-            if status not in task_groups_map:
-                task_groups_map[status] = []
-            task_groups_map[status].append(task.id)
+        # 4. Set visualization position
+        task.visualization['position'] = {'x': (task_index % 5) * 10, 'y': (task_index // 5) * 50}
 
-            # 4. Set visualization position
-            task.visualization['position'] = {'x': (i % 5) * 10, 'y': (i // 5) * 50}
+    def _finalize_workflow_data(self, workflow: Workflow) -> None:
+        """
+        Finalize workflow data after parsing, calculating statistics and timeline.
+        """
+        start_times = workflow.timeline.pop('start_times', [])
+        end_times = workflow.timeline.pop('end_times', [])
 
-        # Finalize and set workflow attributes
-        workflow.dependencies = dependencies
-        workflow.task_groups = [{'name': name, 'tasks': tasks} for name, tasks in task_groups_map.items()]
-
-        # Finalize timeline
-        timeline = {
+        workflow.timeline.update({
             'earliest_start': min(start_times).isoformat() if start_times else None,
             'latest_end': max(end_times).isoformat() if end_times else None,
-            'total_duration': 0,
-        }
-        if timeline['earliest_start'] and timeline['latest_end']:
-            try:
-                start_dt = datetime.fromisoformat(timeline['earliest_start'].replace('Z', '+00:00'))
-                end_dt = datetime.fromisoformat(timeline['latest_end'].replace('Z', '+00:00'))
-                timeline['total_duration'] = (end_dt - start_dt).total_seconds()
-            except ValueError:
-                pass # Already logged warnings
-        workflow.timeline = timeline
+            'total_duration': 0
+        })
 
-        # Finalize statistics
+        if workflow.timeline['earliest_start'] and workflow.timeline['latest_end']:
+            try:
+                start_dt = datetime.fromisoformat(workflow.timeline['earliest_start'].replace('Z', '+00:00'))
+                end_dt = datetime.fromisoformat(workflow.timeline['latest_end'].replace('Z', '+00:00'))
+                workflow.timeline['total_duration'] = (end_dt - start_dt).total_seconds()
+            except ValueError:
+                pass  # Warnings already logged
+
         workflow.statistics = {
             'total_tasks': len(workflow.tasks),
             'dependency_count': len(workflow.dependencies),
