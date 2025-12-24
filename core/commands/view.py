@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from config.config import Config
 from core.file_monitor import FileMonitor
-from core.log_processor import LogProcessor
+from core.log_processor import StreamingLogProcessor
 from core.state_manager import StateManager
 from parsers.workflow_parser import WorkflowParser
 from ui.app import RocotoViewerApp
@@ -30,7 +30,7 @@ def run_app(config_path: Optional[Path] = None, workflow_path: Optional[Path] = 
         setup_logging(log_level, Path(config.logging.file) if config.logging.file else None)
 
         state_manager = StateManager(config)
-        log_processor = LogProcessor(config)
+        log_processor = StreamingLogProcessor(config)
         file_monitor = FileMonitor(config, state_manager)
         workflow_parser = WorkflowParser(config)
 

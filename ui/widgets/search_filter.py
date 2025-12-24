@@ -16,7 +16,7 @@ from textual.message import Message
 
 from ...config.config import Config
 from ...core.state_manager import StateManager
-from ...core.log_processor import LogProcessor
+from ...core.log_processor import StreamingLogProcessor
 from ...parsers.workflow_parser import WorkflowParser
 
 
@@ -32,7 +32,7 @@ class SearchFilter(Container):
     log_level_filter = reactive("")
     
     def __init__(self, config: Config, state_manager: StateManager, 
-                 log_processor: LogProcessor, workflow_parser: WorkflowParser):
+                 log_processor: StreamingLogProcessor, workflow_parser: WorkflowParser):
         """
         Initialize the search filter widget.
         

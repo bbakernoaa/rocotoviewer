@@ -18,7 +18,7 @@ from textual.timer import Timer
 
 from ...config.config import Config
 from ...core.state_manager import StateManager
-from ...core.log_processor import LogProcessor
+from ...core.log_processor import StreamingLogProcessor
 from ...parsers.workflow_parser import WorkflowParser
 
 
@@ -32,7 +32,7 @@ class LogViewer(Container):
     selected_log_entry = reactive(None)
     
     def __init__(self, config: Config, state_manager: StateManager, 
-                 log_processor: LogProcessor, workflow_parser: WorkflowParser):
+                 log_processor: StreamingLogProcessor, workflow_parser: WorkflowParser):
         """
         Initialize the log viewer widget.
         

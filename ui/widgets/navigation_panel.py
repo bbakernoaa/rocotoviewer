@@ -17,7 +17,7 @@ from textual.events import Click
 
 from ...config.config import Config
 from ...core.state_manager import StateManager
-from ...core.log_processor import LogProcessor
+from ...core.log_processor import StreamingLogProcessor
 from ...parsers.workflow_parser import WorkflowParser
 from ...core.event_bus import get_event_bus, WorkflowEvent
 
@@ -32,7 +32,7 @@ class NavigationPanel(Container):
     selected_workflow_id = reactive("")
     
     def __init__(self, config: Config, state_manager: StateManager, 
-                 log_processor: LogProcessor, workflow_parser: WorkflowParser):
+                 log_processor: StreamingLogProcessor, workflow_parser: WorkflowParser):
         """
         Initialize the navigation panel widget.
         
