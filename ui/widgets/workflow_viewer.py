@@ -21,7 +21,7 @@ from textual.coordinate import Coordinate
 
 from ...config.config import Config
 from ...core.state_manager import StateManager
-from ...core.log_processor import LogProcessor
+from ...core.log_processor import StreamingLogProcessor
 from ...parsers.workflow_parser import WorkflowParser
 from ...core.event_bus import WorkflowEvent, get_event_bus
 from ...utils.formatting import FormattingUtils
@@ -44,7 +44,7 @@ class WorkflowViewer(Container):
     search_term = reactive("")
     
     def __init__(self, config: Config, state_manager: StateManager, 
-                 log_processor: LogProcessor, workflow_parser: WorkflowParser):
+                 log_processor: StreamingLogProcessor, workflow_parser: WorkflowParser):
         """
         Initialize the workflow viewer widget.
         

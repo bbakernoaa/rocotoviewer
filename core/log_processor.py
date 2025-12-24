@@ -43,8 +43,11 @@ class StreamingLogProcessor:
         self.config = config
         self.logger = logging.getLogger(__name__)
         
-        # Common log patterns for Rocoto workflows
-        self.patterns = Settings().LOG_PATTERNS
+        # Pre-compile regex patterns for efficiency
+        self.patterns = {
+            key: re.compile(pattern, re.IGNORECASE) if key == 'task_status' else re.compile(pattern)
+            for key, pattern in Settings().LOG_PATTERNS.items()
+        }
         
         # Buffer for streaming logs
         self.stream_buffers: Dict[Path, deque] = {}
@@ -203,7 +206,7 @@ class StreamingLogProcessor:
         }
         
         # Extract timestamp
-        timestamp_match = re.search(self.patterns['timestamp'], line)
+        timestamp_match = self.patterns['timestamp'].search(line)
         if timestamp_match:
             try:
                 result['timestamp'] = datetime.strptime(timestamp_match.group(), '%Y-%m-%d %H:%M:%S')
@@ -215,19 +218,19 @@ class StreamingLogProcessor:
                     pass  # If timestamp format is unexpected, leave as None
         
         # Extract task ID
-        task_match = re.search(self.patterns['task_id'], line)
+        task_match = self.patterns['task_id'].search(line)
         if not task_match:
-            task_match = re.search(self.patterns['rocoto_task'], line)
+            task_match = self.patterns['rocoto_task'].search(line)
         if task_match:
             result['task_id'] = task_match.group(1) if len(task_match.groups()) > 0 else task_match.group()
         
         # Extract cycle info
-        cycle_match = re.search(self.patterns['cycle_info'], line)
+        cycle_match = self.patterns['cycle_info'].search(line)
         if cycle_match:
             result['cycle'] = cycle_match.group(1)
         
         # Extract status
-        status_match = re.search(self.patterns['task_status'], line, re.IGNORECASE)
+        status_match = self.patterns['task_status'].search(line)
         if status_match:
             result['status'] = status_match.group()
         
@@ -419,156 +422,3 @@ class StreamingLogProcessor:
             'level_counts': level_counts,
             'last_modified': log_path.stat().st_mtime if log_path.exists() else None
         }
-
-
-class LogProcessor:
-    """
-    Handles processing of workflow logs with filtering and formatting capabilities.
-    """
-    
-    def __init__(self, config):
-        """
-        Initialize the log processor with configuration.
-        
-        Args:
-            config: Application configuration
-        """
-        self.config = config
-        self.logger = logging.getLogger(__name__)
-        self.streaming_processor = StreamingLogProcessor(config)
-        
-        # Common log patterns for Rocoto workflows
-        self.patterns = Settings().LOG_PATTERNS
-    
-    def register_stream_callback(self, log_path: Path, callback: Callable[[Dict[str, Any]], None]):
-        """
-        Register a callback to receive real-time log updates.
-        
-        Args:
-            log_path: Path to the log file
-            callback: Function to call when new log entries are available
-        """
-        return self.streaming_processor.register_stream_callback(log_path, callback)
-    
-    def unregister_stream_callback(self, log_path: Path, callback: Callable[[Dict[str, Any]], None]):
-        """
-        Unregister a callback from receiving real-time log updates.
-        
-        Args:
-            log_path: Path to the log file
-            callback: Function to remove from callbacks
-        """
-        return self.streaming_processor.unregister_stream_callback(log_path, callback)
-    
-    def process_new_log_line(self, log_path: Path, line: str) -> Optional[Dict[str, Any]]:
-        """
-        Process a new log line in real-time.
-        
-        Args:
-            log_path: Path to the log file
-            line: New log line to process
-            
-        Returns:
-            Parsed log entry or None if parsing failed
-        """
-        return self.streaming_processor.process_new_log_line(log_path, line)
-    
-    def read_log_file(self, log_path: Path, max_lines: Optional[int] = None) -> List[str]:
-        """
-        Read log file with optional line limit.
-        
-        Args:
-            log_path: Path to log file
-            max_lines: Maximum number of lines to read (from end)
-            
-        Returns:
-            List of log lines
-        """
-        return self.streaming_processor.read_log_file(log_path, max_lines)
-    
-    def parse_log_line(self, line: str) -> Dict[str, Any]:
-        """
-        Parse a single log line into structured data.
-        
-        Args:
-            line: Log line to parse
-            
-        Returns:
-            Dictionary with parsed log data
-        """
-        return self.streaming_processor.parse_log_line(line)
-    
-    def filter_logs(self, logs: List[Dict[str, Any]], 
-                   level: Optional[str] = None,
-                   task_id: Optional[str] = None,
-                   status: Optional[str] = None,
-                   search_term: Optional[str] = None,
-                   start_time: Optional[float] = None,
-                   end_time: Optional[float] = None) -> List[Dict[str, Any]]:
-        """
-        Filter logs based on various criteria.
-        
-        Args:
-            logs: List of parsed log dictionaries
-            level: Log level to filter (INFO, WARNING, ERROR, DEBUG)
-            task_id: Task ID to filter
-            status: Status to filter (succeeded, failed, etc.)
-            search_term: Text to search for in messages
-            start_time: Filter logs after this timestamp (Unix timestamp)
-            end_time: Filter logs before this timestamp (Unix timestamp)
-            
-        Returns:
-            Filtered list of log dictionaries
-        """
-        return self.streaming_processor.filter_logs(logs, level, task_id, status, 
-                                                   search_term, start_time, end_time)
-    
-    def get_recent_logs(self, log_path: Path, count: int = 100) -> List[Dict[str, Any]]:
-        """
-        Get the most recent log entries from a file.
-        
-        Args:
-            log_path: Path to log file
-            count: Number of recent entries to return
-            
-        Returns:
-            List of parsed log dictionaries
-        """
-        return self.streaming_processor.get_recent_logs(log_path, count)
-    
-    def get_streaming_logs(self, log_path: Path, count: int = 100) -> List[Dict[str, Any]]:
-        """
-        Get logs from the streaming buffer.
-        
-        Args:
-            log_path: Path to log file
-            count: Number of recent entries to return
-            
-        Returns:
-            List of parsed log dictionaries from the streaming buffer
-        """
-        return self.streaming_processor.get_streaming_logs(log_path, count)
-    
-    def analyze_workflow_status(self, log_path: Path) -> Dict[str, Any]:
-        """
-        Analyze workflow status from log file.
-        
-        Args:
-            log_path: Path to log file
-            
-        Returns:
-            Dictionary with workflow status analysis
-        """
-        return self.streaming_processor.analyze_workflow_status(log_path)
-    
-    def get_log_statistics(self, log_path: Path) -> Dict[str, Any]:
-        """
-        Get statistics about a log file.
-        
-        Args:
-            log_path: Path to log file
-            
-        Returns:
-            Dictionary with log statistics
-        """
-        return self.streaming_processor.get_log_statistics(log_path)
