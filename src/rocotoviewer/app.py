@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
-from textual.widgets import Footer, Header, Tree, DataTable
-from textual import work
+from textual.widgets import DataTable, Footer, Header, Tree
 
 from rocotoviewer.parser import RocotoParser
+
 
 class RocotoApp(App):
     CSS = """
@@ -73,22 +74,24 @@ class RocotoApp(App):
         table.add_columns("Cycle", "Task", "Job ID", "State", "Exit", "Tries", "Duration")
 
         for cycle_info in status_data:
-            cycle_node = tree.root.add(cycle_info['cycle'], expand=True)
-            for task in cycle_info['tasks']:
-                cycle_node.add_leaf(task['task'])
+            cycle_node = tree.root.add(cycle_info["cycle"], expand=True)
+            for task in cycle_info["tasks"]:
+                cycle_node.add_leaf(task["task"])
                 table.add_row(
-                    cycle_info['cycle'],
-                    task['task'],
-                    str(task['jobid']),
-                    task['state'],
-                    str(task['exit']),
-                    str(task['tries']),
-                    str(task['duration'])
+                    cycle_info["cycle"],
+                    task["task"],
+                    str(task["jobid"]),
+                    task["state"],
+                    str(task["exit"]),
+                    str(task["tries"]),
+                    str(task["duration"]),
                 )
 
         self.notify("Status Refreshed")
 
+
 if __name__ == "__main__":
     import sys
+
     app = RocotoApp(sys.argv[1], sys.argv[2])
     app.run()

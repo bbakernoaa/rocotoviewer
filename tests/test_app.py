@@ -1,7 +1,10 @@
-import pytest
 import sqlite3
-from rocotoviewer.app import RocotoApp
+
+import pytest
 from textual.widgets import DataTable, Tree
+
+from rocotoviewer.app import RocotoApp
+
 
 @pytest.fixture
 def mock_rocoto_files(tmp_path):
@@ -17,14 +20,20 @@ def mock_rocoto_files(tmp_path):
 
     conn = sqlite3.connect(db_file)
     c = conn.cursor()
-    c.execute('CREATE TABLE cycles (cycle INTEGER)')
-    c.execute('INSERT INTO cycles VALUES (1672531200)') # 2023-01-01 00:00:00
-    c.execute('CREATE TABLE jobs (taskname TEXT, cycle INTEGER, state TEXT, exit_status INTEGER, duration INTEGER, tries INTEGER, jobid TEXT)')
+    c.execute("CREATE TABLE cycles (cycle INTEGER)")
+    c.execute("INSERT INTO cycles VALUES (1672531200)")  # 2023-01-01 00:00:00
+    c.execute("""
+        CREATE TABLE jobs (
+            taskname TEXT, cycle INTEGER, state TEXT,
+            exit_status INTEGER, duration INTEGER, tries INTEGER, jobid TEXT
+        )
+    """)
     c.execute("INSERT INTO jobs VALUES ('task1', 1672531200, 'SUCCEEDED', 0, 100, 1, '12345')")
     conn.commit()
     conn.close()
 
     return str(workflow_file), str(db_file)
+
 
 @pytest.mark.asyncio
 async def test_app_ui_loading(mock_rocoto_files):

@@ -1,16 +1,20 @@
 import argparse
 import os
+
 from rocotoviewer.app import RocotoApp
+
 
 def main():
     parser = argparse.ArgumentParser(description="RocotoViewer — Textual interface to Rocoto")
     parser.add_argument(
-        "-w", "--workflow",
+        "-w",
+        "--workflow",
         required=True,
         help="Rocoto XML workflow file",
     )
     parser.add_argument(
-        "-d", "--database",
+        "-d",
+        "--database",
         required=True,
         help="Rocoto SQLite database file",
     )
@@ -26,6 +30,7 @@ def main():
 
     app = RocotoApp(workflow_file=args.workflow, database_file=args.database)
     app.run()
+
 
 if __name__ == "__main__":
     main()
