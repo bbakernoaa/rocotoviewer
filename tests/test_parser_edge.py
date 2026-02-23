@@ -1,3 +1,7 @@
+"""
+.. note:: warning: "If you modify features, API, or usage, you MUST update the documentation immediately."
+"""
+
 from rocotoviewer.parser import RocotoParser
 
 
@@ -46,3 +50,25 @@ def test_entity_parsing(tmp_path):
     entities = parser._get_entity_values()
     assert entities["TEST"] == "value"
     assert entities["SYSTEM_TEST"] == "some_file"
+
+
+def test_parser_sqlite_error(caplog):
+    import sqlite3
+    from unittest.mock import patch
+
+    parser = RocotoParser("wf", "db")
+    # Make exists return True so it tries to connect
+    with patch("os.path.exists", return_value=True):
+        with patch("sqlite3.connect", side_effect=sqlite3.Error("Mocked database error")):
+            status = parser.get_status()
+            assert status == []
+            assert "Database error while fetching status: Mocked database error" in caplog.text
+
+
+def test_parser_xml_parse_error(tmp_path, caplog):
+    wf = tmp_path / "malformed.xml"
+    wf.write_text("<workflow><task name='foo'>")  # Missing closing tags
+    parser = RocotoParser(str(wf), "db")
+    parser.parse_workflow()
+    assert parser.tasks_ordered == []
+    assert "Failed to parse workflow XML" in caplog.text
