@@ -4,13 +4,17 @@
 
 from __future__ import annotations
 
-import collections
+import logging
 import os
 import re
 import sqlite3
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Constants
 DEFAULT_CYCLE = "default_cycle"
@@ -23,7 +27,17 @@ class RocotoTask:
     Represents a task definition from the Rocoto XML.
     """
 
-    def __init__(self, name: str, cycledefs: str):
+    def __init__(self, name: str, cycledefs: str) -> None:
+        """
+        Initialize a RocotoTask.
+
+        Parameters
+        ----------
+        name : str
+            The name of the task.
+        cycledefs : str
+            The cycle definitions associated with the task.
+        """
         self.name = name
         self.cycledefs = cycledefs
         self.command: str = ""
@@ -37,6 +51,14 @@ class RocotoTask:
         self.dependencies: list[dict[str, Any]] = []
 
     def to_dict(self) -> dict[str, Any]:
+        """
+                Convert the RocotoTask to a dictionary.
+
+                Returns
+        -------
+                dict[str, Any]
+                    A dictionary representation of the task.
+        """
         return {
             "name": self.name,
             "cycledefs": self.cycledefs,
@@ -58,13 +80,23 @@ class RocotoParser:
     """
 
     def __init__(self, workflow_file: str, database_file: str) -> None:
+        """
+        Initialize the RocotoParser.
+
+        Parameters
+        ----------
+        workflow_file : str
+            Path to the Rocoto workflow XML file.
+        database_file : str
+            Path to the Rocoto SQLite database file.
+        """
         self.workflow_file: str = workflow_file
         self.database_file: str = database_file
         self.entity_values: dict[str, str] = {}
         self.tasks_dict: dict[str, RocotoTask] = {}
         self.tasks_ordered: list[str] = []
-        self.metatask_list: dict[str, list[str]] = collections.defaultdict(list)
-        self.cycledef_group_cycles: dict[str, list[str]] = collections.defaultdict(list)
+        self.metatask_list: dict[str, list[str]] = defaultdict(list)
+        self.cycledef_group_cycles: dict[str, list[str]] = defaultdict(list)
 
     def parse_workflow(self) -> None:
         """Parse the XML workflow file."""
@@ -72,32 +104,46 @@ class RocotoParser:
         self._load_workflow_xml()
 
     def _get_entity_values(self) -> dict[str, str]:
-        entity_values: dict[str, str] = collections.defaultdict(str)
+        """
+        Extract XML entity values from the workflow file's DTD.
+
+        Returns
+        -------
+        dict[str, str]
+            A dictionary mapping entity names to their values.
+        """
+        entity_values: dict[str, str] = defaultdict(str)
         if not os.path.exists(self.workflow_file):
             return entity_values
 
         try:
-            with open(self.workflow_file) as f:
+            with open(self.workflow_file, encoding="utf-8") as f:
                 content = f.read()
                 dtd_match = re.search(r"<!DOCTYPE workflow\s+\[(.*?)\]>", content, re.DOTALL)
                 if dtd_match:
                     dtd_content = dtd_match.group(1)
-                    entity_matches = re.finditer(r'<!ENTITY\s+(\w+)\s+(?:SYSTEM\s+)?["\']([^"\']*)["\']\s*>', dtd_content)
+                    entity_matches = re.finditer(
+                        r'<!ENTITY\s+(\w+)\s+(?:SYSTEM\s+)?["\']([^"\']*)["\']\s*>',
+                        dtd_content,
+                    )
                     for match in entity_matches:
                         name, value = match.groups()
                         for k, v in entity_values.items():
                             value = value.replace(f"&{k};", v)
                         entity_values[name] = value
-        except Exception:
-            pass
+        except OSError as e:
+            logger.error("Failed to read workflow file for entities: %s", e)
         return entity_values
 
     def _load_workflow_xml(self) -> None:
+        """
+        Load and parse the workflow XML after entity substitution.
+        """
         if not os.path.exists(self.workflow_file):
             return
 
         try:
-            with open(self.workflow_file) as f:
+            with open(self.workflow_file, encoding="utf-8") as f:
                 content = f.read()
 
             # Substitute entities
@@ -115,13 +161,17 @@ class RocotoParser:
             content = re.sub(r"<!DOCTYPE.*?>", "", content, flags=re.DOTALL)
 
             root = ET.fromstring(content.strip())
-        except Exception:
+        except ET.ParseError as e:
+            logger.error("Failed to parse workflow XML: %s", e)
+            return
+        except OSError as e:
+            logger.error("Failed to read workflow XML file: %s", e)
             return
 
         self.tasks_dict = {}
         self.tasks_ordered = []
-        self.metatask_list = collections.defaultdict(list)
-        self.cycledef_group_cycles = collections.defaultdict(list)
+        self.metatask_list = defaultdict(list)
+        self.cycledef_group_cycles = defaultdict(list)
 
         for child in root:
             if child.tag == "cycledef":
@@ -132,6 +182,14 @@ class RocotoParser:
                 self._expand_metatask(child, {}, [])
 
     def _parse_cycledef(self, element: ET.Element) -> None:
+        """
+        Parse a <cycledef> element and populate cycledef_group_cycles.
+
+        Parameters
+        ----------
+        element : ET.Element
+            The cycledef XML element.
+        """
         group = element.attrib.get("group", DEFAULT_CYCLE)
         if not element.text:
             return
@@ -151,10 +209,27 @@ class RocotoParser:
                     while curr <= end:
                         self.cycledef_group_cycles[group].append(curr.strftime(CYCLE_FORMAT))
                         curr += inc
-            except Exception:
-                pass
+            except ValueError as e:
+                logger.warning("Failed to parse cycledef text '%s': %s", text, e)
 
-    def _expand_metatask(self, element: ET.Element, current_vars: dict[str, str], parent_metatasks: list[str]) -> None:
+    def _expand_metatask(
+        self,
+        element: ET.Element,
+        current_vars: dict[str, str],
+        parent_metatasks: list[str],
+    ) -> None:
+        """
+        Recursively expand <metatask> elements.
+
+        Parameters
+        ----------
+        element : ET.Element
+            The metatask XML element.
+        current_vars : dict[str, str]
+            Current variable substitutions.
+        parent_metatasks : list[str]
+            List of parent metatask names for hierarchical tracking.
+        """
         m_name = element.attrib.get("name", NO_NAME)
 
         vars_dict: dict[str, list[str]] = {}
@@ -190,7 +265,24 @@ class RocotoParser:
                 elif child.tag == "metatask":
                     self._expand_metatask(child, new_vars, new_parents)
 
-    def _add_task(self, element: ET.Element, vars_dict: dict[str, str], parent_metatasks: list[str]) -> None:
+    def _add_task(
+        self,
+        element: ET.Element,
+        vars_dict: dict[str, str],
+        parent_metatasks: list[str],
+    ) -> None:
+        """
+        Parse and add a <task> definition.
+
+        Parameters
+        ----------
+        element : ET.Element
+            The task XML element.
+        vars_dict : dict[str, str]
+            Current variable substitutions.
+        parent_metatasks : list[str]
+            List of parent metatask names.
+        """
         name = element.attrib.get("name", NO_NAME)
         cycledefs = element.attrib.get("cycledefs", DEFAULT_CYCLE)
 
@@ -226,6 +318,19 @@ class RocotoParser:
             self.metatask_list[p_name].append(name)
 
     def _parse_deps(self, element: ET.Element) -> list[dict[str, Any]]:
+        """
+                Parse task dependencies recursively.
+
+                Parameters
+                ----------
+                element : ET.Element
+                    The dependency XML element.
+
+                Returns
+        -------
+                list[dict[str, Any]]
+                    A list of dependency dictionaries.
+        """
         deps = []
         for child in element:
             dep = {"type": child.tag, "attrib": dict(child.attrib)}
@@ -237,12 +342,27 @@ class RocotoParser:
         return deps
 
     def resolve_cyclestr(self, text: str, cycle: str) -> str:
+        """
+        Resolve Rocoto <cyclestr> tags in a string.
+
+        Parameters
+        ----------
+        text : str
+            The string containing <cyclestr> tags.
+        cycle : str
+            The cycle string to use for resolution.
+
+        Returns
+        -------
+        str
+            The resolved string.
+        """
         try:
             dt = datetime.strptime(cycle, CYCLE_FORMAT)
-        except Exception:
+        except ValueError:
             return text
 
-        def replace_cyclestr(match):
+        def replace_cyclestr(match: re.Match) -> str:
             full_tag = match.group(0)
             content = match.group(1)
 
@@ -259,9 +379,18 @@ class RocotoParser:
                 delta = timedelta()
                 try:
                     if len(parts) == 4:
-                        delta = timedelta(days=int(parts[0]), hours=int(parts[1]), minutes=int(parts[2]), seconds=int(parts[3]))
+                        delta = timedelta(
+                            days=int(parts[0]),
+                            hours=int(parts[1]),
+                            minutes=int(parts[2]),
+                            seconds=int(parts[3]),
+                        )
                     elif len(parts) == 3:
-                        delta = timedelta(hours=int(parts[0]), minutes=int(parts[1]), seconds=int(parts[2]))
+                        delta = timedelta(
+                            hours=int(parts[0]),
+                            minutes=int(parts[1]),
+                            seconds=int(parts[2]),
+                        )
                     elif len(parts) == 2:
                         delta = timedelta(minutes=int(parts[0]), seconds=int(parts[1]))
                     elif len(parts) == 1:
@@ -296,9 +425,22 @@ class RocotoParser:
             res = res.replace("@s", str(int(current_dt.timestamp())))
             return res
 
-        return re.sub(r"<cyclestr(?:\s+[^>]*?)?>(.*?)</cyclestr>", replace_cyclestr, text, flags=re.DOTALL)
+        return re.sub(
+            r"<cyclestr(?:\s+[^>]*?)?>(.*?)</cyclestr>",
+            replace_cyclestr,
+            text,
+            flags=re.DOTALL,
+        )
 
     def get_status(self) -> list[dict[str, Any]]:
+        """
+                Query the SQLite database for the status of tasks and cycles.
+
+                Returns
+        -------
+                list[dict[str, Any]]
+                    A list of cycle-task status information.
+        """
         if not os.path.exists(self.database_file):
             return []
 
@@ -307,12 +449,15 @@ class RocotoParser:
             connection.row_factory = sqlite3.Row
             c = connection.cursor()
             cycles_raw = [row["cycle"] for row in c.execute("SELECT cycle FROM cycles ORDER BY cycle ASC")]
-            jobs_data = collections.defaultdict(dict)
-            q = c.execute("SELECT taskname, cycle, state, exit_status, duration, tries, jobid FROM jobs")
+            jobs_data = defaultdict(dict)
+            q = c.execute(
+                "SELECT taskname, cycle, state, exit_status, duration, tries, jobid FROM jobs",
+            )
             for row in q:
                 jobs_data[row["cycle"]][row["taskname"]] = dict(row)
             connection.close()
-        except sqlite3.Error:
+        except sqlite3.Error as e:
+            logger.error("Database error while fetching status: %s", e)
             return []
 
         result: list[dict[str, Any]] = []
@@ -355,6 +500,19 @@ class RocotoParser:
         return result
 
     def _parse_cycle(self, cycle_val: Any) -> str:
+        """
+        Parse a cycle value (timestamp or string) into YYYYMMDDHHMM format.
+
+        Parameters
+        ----------
+        cycle_val : Any
+            The cycle value to parse.
+
+        Returns
+        -------
+        str
+            The formatted cycle string.
+        """
         if isinstance(cycle_val, int):
             if cycle_val > 200000000000:
                 return str(cycle_val)
@@ -362,6 +520,6 @@ class RocotoParser:
                 try:
                     if cycle_val >= 0:
                         return datetime.fromtimestamp(cycle_val).strftime(CYCLE_FORMAT)
-                except Exception:
-                    pass
+                except (ValueError, OSError) as e:
+                    logger.warning("Failed to parse cycle timestamp %d: %s", cycle_val, e)
         return str(cycle_val)

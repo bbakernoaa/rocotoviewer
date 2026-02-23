@@ -31,44 +31,6 @@ class RocotoApp(App[None]):
         Additional keyword arguments passed to the Textual App constructor.
     """
 
-    CSS = """
-    Screen {
-        background: $surface;
-    }
-
-    #sidebar {
-        width: 25%;
-        height: 100%;
-        border-right: solid $primary;
-    }
-
-    #main_content {
-        width: 75%;
-        height: 100%;
-    }
-
-    #filter_input {
-        margin: 1;
-    }
-
-    DataTable {
-        height: 60%;
-    }
-
-    #details_panel {
-        height: 40%;
-        border-top: double $primary;
-        padding: 1;
-        background: $surface;
-        overflow-y: scroll;
-    }
-
-    .bold {
-        text-style: bold;
-        color: $accent;
-    }
-    """
-
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
@@ -188,58 +150,59 @@ class RocotoApp(App[None]):
         """
         Update UI widgets with new data.
         """
-        filter_text = self.query_one("#filter_input", Input).value.lower()
+        with self.batch_update():
+            filter_text = self.query_one("#filter_input", Input).value.lower()
 
-        tree = self.query_one("#cycle_tree", Tree)
-        # To preserve expansion state, we'll track existing nodes
-        existing_cycles = {str(node.label): node for node in tree.root.children}
+            tree = self.query_one("#cycle_tree", Tree)
+            # To preserve expansion state, we'll track existing nodes
+            existing_cycles = {str(node.label): node for node in tree.root.children}
 
-        table = self.query_one("#status_table", DataTable)
-        table.clear(columns=True)
-        table.add_columns("Cycle", "Task", "Job ID", "State", "Exit", "Tries", "Duration")
+            table = self.query_one("#status_table", DataTable)
+            table.clear(columns=True)
+            table.add_columns("Cycle", "Task", "Job ID", "State", "Exit", "Tries", "Duration")
 
-        for cycle_info in self.all_data:
-            cycle_str = cycle_info["cycle"]
-            cycle_node = existing_cycles.get(cycle_str)
+            for cycle_info in self.all_data:
+                cycle_str = cycle_info["cycle"]
+                cycle_node = existing_cycles.get(cycle_str)
 
-            # If cycle node doesn't exist, create it.
-            # We don't expand by default anymore as per "when selected expanded"
-            if cycle_node is None:
-                cycle_node = tree.root.add(cycle_str, expand=False)
+                # If cycle node doesn't exist, create it.
+                # We don't expand by default anymore as per "when selected expanded"
+                if cycle_node is None:
+                    cycle_node = tree.root.add(cycle_str, expand=False)
 
-            # Clear children of cycle node to refresh tasks (easier than matching)
-            # but this might lose selection if a task was selected.
-            # However, selecting a task is usually done in the table.
-            cycle_node.remove_children()
+                # Clear children of cycle node to refresh tasks (easier than matching)
+                # but this might lose selection if a task was selected.
+                # However, selecting a task is usually done in the table.
+                cycle_node.remove_children()
 
-            for task in cycle_info["tasks"]:
-                task_name = task["task"]
-                if filter_text and filter_text not in task_name.lower():
-                    continue
+                for task in cycle_info["tasks"]:
+                    task_name = task["task"]
+                    if filter_text and filter_text not in task_name.lower():
+                        continue
 
-                state = task["state"]
-                if state == "SUCCEEDED":
-                    state_color = "green"
-                elif state == "RUNNING":
-                    state_color = "yellow"
-                elif state == "FAILED":
-                    state_color = "red"
-                else:
-                    state_color = "white"
-                leaf = cycle_node.add_leaf(f"{task_name} [{state_color}]{state}[/{state_color}]")
-                leaf.data = task_name
+                    state = task["state"]
+                    if state == "SUCCEEDED":
+                        state_color = "green"
+                    elif state == "RUNNING":
+                        state_color = "yellow"
+                    elif state == "FAILED":
+                        state_color = "red"
+                    else:
+                        state_color = "white"
+                    leaf = cycle_node.add_leaf(f"{task_name} [{state_color}]{state}[/{state_color}]")
+                    leaf.data = task_name
 
-                row_key = f"{cycle_str}:{task_name}"
-                table.add_row(
-                    cycle_str,
-                    task_name,
-                    str(task["jobid"] or "-"),
-                    task["state"],
-                    str(task["exit"] if task["exit"] is not None else "-"),
-                    str(task["tries"]),
-                    str(task["duration"] or "-"),
-                    key=row_key,
-                )
+                    row_key = f"{cycle_str}:{task_name}"
+                    table.add_row(
+                        cycle_str,
+                        task_name,
+                        str(task["jobid"] or "-"),
+                        task["state"],
+                        str(task["exit"] if task["exit"] is not None else "-"),
+                        str(task["tries"]),
+                        str(task["duration"] or "-"),
+                        key=row_key,
+                    )
 
             # If no tasks visible for this cycle (due to filter), maybe hide cycle node?
             # For now, we'll keep it.
