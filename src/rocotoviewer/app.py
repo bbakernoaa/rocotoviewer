@@ -181,23 +181,39 @@ class RocotoApp(App[None]):
                         continue
 
                     state = task["state"]
+                    icon = ""
                     if state == "SUCCEEDED":
                         state_color = "green"
+                        icon = "✅"
                     elif state == "RUNNING":
                         state_color = "yellow"
+                        icon = "🏃"
                     elif state == "FAILED":
                         state_color = "red"
+                        icon = "❌"
+                    elif state == "DEAD":
+                        state_color = "red"
+                        icon = "💀"
+                    elif state == "QUEUED":
+                        state_color = "blue"
+                        icon = "🕒"
+                    elif state in ["WAITING", "PENDING"]:
+                        state_color = "white"
+                        icon = "⌛"
                     else:
                         state_color = "white"
-                    leaf = cycle_node.add_leaf(f"{task_name} [{state_color}]{state}[/{state_color}]")
+                        icon = "❓"
+
+                    leaf_label = f"{icon} {task_name} [{state_color}]{state}[/{state_color}]"
+                    leaf = cycle_node.add_leaf(leaf_label)
                     leaf.data = task_name
 
                     row_key = f"{cycle_str}:{task_name}"
                     table.add_row(
                         cycle_str,
-                        task_name,
+                        f"{icon} {task_name}",
                         str(task["jobid"] or "-"),
-                        task["state"],
+                        f"[{state_color}]{state}[/{state_color}]",
                         str(task["exit"] if task["exit"] is not None else "-"),
                         str(task["tries"]),
                         str(task["duration"] or "-"),

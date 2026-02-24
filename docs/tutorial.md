@@ -25,7 +25,14 @@ The **Cycle Tree** allows you to navigate the hierarchy of your workflow.
 *   **Keyboard**: Use the `Up` and `Down` arrow keys to highlight a cycle. Press `Enter` to **expand** or **collapse** the selected cycle.
 *   **Mouse**: Click on a cycle name or the expansion icon next to it to toggle its state.
 
-Expand the `202310271200` (the 12Z cycle). You will see the tasks associated with that cycle appear underneath it, color-coded by their current state.
+Expand the `202310271200` (the 12Z cycle). You will see the tasks associated with that cycle appear underneath it.
+
+RocotoViewer uses **icons** and **colors** to help you quickly identify task states:
+*   ✅ **SUCCEEDED**: Task finished successfully.
+*   🏃 **RUNNING**: Task is currently executing.
+*   💀 **DEAD**: Task failed and will not be retried automatically.
+*   🕒 **QUEUED**: Task is waiting for resources in the batch system.
+*   ⌛ **WAITING / PENDING**: Task is waiting for dependencies to be met.
 
 ![Expanded 12Z Cycle](screenshots/overview.svg)
 

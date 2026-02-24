@@ -8,8 +8,8 @@ This guide provides a detailed walkthrough of the RocotoViewer interface and its
 
 RocotoViewer's interface is divided into three main sections:
 
-1.  **Sidebar (Cycle Tree)**: Displays a hierarchical view of workflow cycles and their tasks. Each cycle can be expanded to see its tasks with color-coded status.
-2.  **Status Table**: A central table showing all tasks for the selected cycle(s). It includes columns for Task name, Job ID, State, Exit code, Tries, and Duration.
+1.  **Sidebar (Cycle Tree)**: Displays a hierarchical view of workflow cycles and their tasks. Each cycle can be expanded to see its tasks with icons and color-coded status (e.g., ✅ for SUCCEEDED, 🏃 for RUNNING, 💀 for DEAD).
+2.  **Status Table**: A central table showing all tasks for the selected cycle(s). It includes columns for Task name (with state icons), Job ID, State, Exit code, Tries, and Duration.
 3.  **Details Panel**: Displays comprehensive information about the currently selected task, including command, log paths, and dependencies.
 4.  **Log Panel**: An optional panel (toggled with `l`) that shows a live tail of the selected task's log file.
 5.  **Status Bar**: Displays the "Path" to the currently selected item (e.g., Workflow > Cycle > Task).

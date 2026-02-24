@@ -30,11 +30,13 @@ tasks_00 = [
 for t in tasks_00:
     c.execute("INSERT INTO jobs VALUES (?, 1698364800, ?, ?, ?, ?, ?)", t)
 
-# Cycle 202310271200: Mixed
+# Cycle 202310271200: Mixed states
 tasks_12 = [
     ("ingest", "SUCCEEDED", 0, 130, 1, "2001"),
     ("run_model_A", "DEAD", 1, 1500, 1, "2002"),
     ("run_model_B", "RUNNING", None, 1200, 1, "2003"),
+    ("post_process", "QUEUED", None, 0, 0, "2004"),
+    ("archive", "WAITING", None, 0, 0, None),
     ("verify", "PENDING", None, 0, 0, None),
 ]
 for t in tasks_12:
