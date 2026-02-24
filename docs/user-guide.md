@@ -28,6 +28,8 @@ RocotoViewer's interface is divided into three main sections:
 
 You can quickly find specific tasks using the filter input at the top of the main content area. Type any part of a task name to filter the visible rows in the Status Table.
 
+![Task Filtering](screenshots/filtering.svg)
+
 ## Auto-Refresh
 
 By default, RocotoViewer automatically refreshes the workflow status every 30 seconds. This ensures you have the latest information without manual intervention.
@@ -43,5 +45,7 @@ When you select a row in the Status Table, the Details Panel at the bottom updat
 ## Log Viewing
 
 RocotoViewer allows you to view task logs directly within the TUI. When a task is selected, you can press `l` to toggle the log panel. If the log file exists, it will be loaded and tailed in real-time.
+
+![Log Viewer](screenshots/details_log.svg)
 
 By default, **Follow mode** is enabled, meaning the view will automatically scroll as new content is added to the log. You can toggle this behavior by pressing `f`.
