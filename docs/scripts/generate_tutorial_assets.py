@@ -63,9 +63,8 @@ async def generate_assets():
         print(f"Resolved stdout: {app.parser.resolve_cyclestr(details['details']['stdout'], app.last_selected_cycle)}")
 
         await pilot.press("l")
-        await pilot.pause(2.0) # Wait for log to be read
+        await pilot.pause(2.0)  # Wait for log to be read
 
-        log_panel = app.query_one("#log_panel")
         # In Textual, RichLog might not have .lines but we can check its content via private or other means
         # but let's just save the screenshot and hope the pause worked.
 
