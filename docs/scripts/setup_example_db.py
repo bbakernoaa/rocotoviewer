@@ -1,6 +1,5 @@
-import sqlite3
 import os
-from datetime import datetime
+import sqlite3
 
 # Run from docs directory
 db = "example_workflow.db"
@@ -15,24 +14,26 @@ c.execute("CREATE TABLE cycles (cycle INTEGER)")
 c.execute("INSERT INTO cycles VALUES (1698364800)")
 c.execute("INSERT INTO cycles VALUES (1698408000)")
 
-c.execute("CREATE TABLE jobs (taskname TEXT, cycle INTEGER, state TEXT, exit_status INTEGER, duration INTEGER, tries INTEGER, jobid TEXT)")
+c.execute(
+    "CREATE TABLE jobs (taskname TEXT, cycle INTEGER, state TEXT, exit_status INTEGER, duration INTEGER, tries INTEGER, jobid TEXT)"
+)
 
 # Cycle 202310270000: All Succeeded
 tasks_00 = [
-    ('ingest', 'SUCCEEDED', 0, 120, 1, '1001'),
-    ('run_model_A', 'SUCCEEDED', 0, 3600, 1, '1002'),
-    ('run_model_B', 'SUCCEEDED', 0, 3500, 1, '1003'),
-    ('post_process', 'SUCCEEDED', 0, 600, 1, '1004'),
-    ('archive', 'SUCCEEDED', 0, 300, 1, '1005'),
+    ("ingest", "SUCCEEDED", 0, 120, 1, "1001"),
+    ("run_model_A", "SUCCEEDED", 0, 3600, 1, "1002"),
+    ("run_model_B", "SUCCEEDED", 0, 3500, 1, "1003"),
+    ("post_process", "SUCCEEDED", 0, 600, 1, "1004"),
+    ("archive", "SUCCEEDED", 0, 300, 1, "1005"),
 ]
 for t in tasks_00:
     c.execute("INSERT INTO jobs VALUES (?, 1698364800, ?, ?, ?, ?, ?)", t)
 
 # Cycle 202310271200: Mixed
 tasks_12 = [
-    ('ingest', 'SUCCEEDED', 0, 130, 1, '2001'),
-    ('run_model_A', 'DEAD', 1, 1500, 1, '2002'),
-    ('run_model_B', 'RUNNING', None, 1200, 1, '2003'),
+    ("ingest", "SUCCEEDED", 0, 130, 1, "2001"),
+    ("run_model_A", "DEAD", 1, 1500, 1, "2002"),
+    ("run_model_B", "RUNNING", None, 1200, 1, "2003"),
 ]
 for t in tasks_12:
     c.execute("INSERT INTO jobs VALUES (?, 1698408000, ?, ?, ?, ?, ?)", t)

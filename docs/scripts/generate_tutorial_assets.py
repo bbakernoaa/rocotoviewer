@@ -1,8 +1,9 @@
 import asyncio
 import os
-import sys
+
 # Add src to path if needed, but assuming installed in editable mode
 from rocotoviewer.app import RocotoApp
+
 
 async def generate_assets():
     # Change directory to docs so relative paths in XML resolve correctly
@@ -53,6 +54,7 @@ async def generate_assets():
         await pilot.pause(0.5)
         app.save_screenshot("screenshots/details_log.svg")
         print("Saved screenshots/details_log.svg")
+
 
 if __name__ == "__main__":
     asyncio.run(generate_assets())
