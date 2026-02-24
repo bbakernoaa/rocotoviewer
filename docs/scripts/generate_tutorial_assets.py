@@ -50,12 +50,16 @@ async def generate_assets():
         await pilot.pause(0.5)
 
         # 4. Details and Log Screenshot
-        await pilot.click("#status_table")
+        # In the new version, selection is done via the Tree
+        tree = app.query_one("#cycle_tree")
+        tree.focus()
         await pilot.press("home")
-        # Row 7 is run_model_A 12Z
-        for _ in range(7):
-            await pilot.press("down")
-        await pilot.press("enter")
+        # 202310271200 is child 1, run_model_A is its child 1
+        await pilot.press("down")  # To 202310271200
+        await pilot.press("enter")  # Expand it
+        await pilot.pause(0.5)
+        await pilot.press("down")  # To first task (e.g. run_model_A)
+        await pilot.press("enter")  # Select it
 
         await pilot.pause(0.5)
         details = app.last_selected_task

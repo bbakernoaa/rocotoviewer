@@ -45,14 +45,14 @@ In the main view, you see a list of tasks. You are looking for a task named `run
 
 ![Filtering Tasks](screenshots/filtering.svg)
 
-The **Status Table** will now only show tasks containing "model" in their name, making it easier to find what you need across all cycles.
+The **Cycle Tree** will now only show tasks containing "model" in their name, making it easier to find what you need across all cycles.
 
 ## Step 4: Inspect Task Details
 
-Find the `run_model_A` task for the `202310271200` cycle in the table. You notice its state is `DEAD`.
+Find the `run_model_A` task for the `202310271200` cycle in the tree. You notice its state is `DEAD`.
 
-*   **Select**: Click on the row in the table or use arrow keys and press `Enter` to select it.
-*   **Observe**: The **Details Panel** at the bottom will populate with information specific to this task instance.
+*   **Select**: Click on the task in the tree or use arrow keys to highlight it.
+*   **Observe**: The **Selected Task Status** table and the **Details** tab will populate with information specific to this task instance.
 
 The Details Panel shows the **Resolved Command** and **Log Paths** (Stdout/Stderr). RocotoViewer automatically resolves `<cyclestr>` tags based on the selected cycle.
 
@@ -60,8 +60,8 @@ The Details Panel shows the **Resolved Command** and **Log Paths** (Stdout/Stder
 
 If a task is running or has failed, you often want to see the output.
 
-1.  With the task selected, press `l` to toggle the **Log Panel**.
-2.  The panel will appear at the bottom, showing a live `tail` of the log file.
+1.  With the task selected, press `l` to switch to the **Log** tab.
+2.  The tab will show a live `tail` of the log file.
 
 ![Log Viewer in Action](screenshots/details_log.svg)
 
@@ -92,11 +92,11 @@ When you select the `verify` task, the **Details Panel** lists these dependencie
 
 | Key | Action | Context |
 | :--- | :--- | :--- |
-| `Up/Down` | Move Selection | Cycle Tree / Status Table |
-| `Enter` | Expand/Collapse or Select | Cycle Tree / Status Table |
-| `Tab` | Switch Focus | Between Tree, Filter, and Table |
-| `l` | Toggle Log Panel | Global |
-| `f` | Toggle Log Follow | While Log Panel is visible |
+| `Up/Down` | Move Selection | Cycle Tree |
+| `Enter` | Expand/Collapse or Select | Cycle Tree |
+| `Tab` | Switch Focus | Between Tree, Filter, and Tabs |
+| `l` | Toggle between Details/Log | Global |
+| `f` | Toggle Log Follow | While Log tab is active |
 | `r` | Manual Refresh | Global |
 | `q` | Quit | Global |
 
