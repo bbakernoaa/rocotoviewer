@@ -1,3 +1,5 @@
+# .. note:: warning: "If you modify features, API, or usage, you MUST update the documentation immediately."
+
 import sqlite3
 
 import pytest
@@ -52,13 +54,16 @@ async def test_log_viewer_toggle_and_content(mock_rocoto_with_logs):
                 break
             await pilot.pause(0.1)
 
-        # Toggle log viewer (switches tab)
-        from textual.widgets import TabbedContent
+        # Toggle log focus
+        details_panel = app.query_one("#details_panel")
+        log_panel = app.query_one("#log_panel")
 
-        tabbed_content = app.query_one(TabbedContent)
-        assert tabbed_content.active == "details_tab"
+        # Details should have focus initially if we navigate to it,
+        # but let's just test that 't' toggles focus
         await pilot.press("t")
-        assert tabbed_content.active == "log_tab"
+        assert app.focused == log_panel
+        await pilot.press("t")
+        assert app.focused == details_panel
 
         log_panel = app.query_one("#log_panel", RichLog)
 
