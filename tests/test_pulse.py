@@ -1,3 +1,5 @@
+# .. note:: warning: "If you modify features, API, or usage, you MUST update the documentation immediately."
+
 import sqlite3
 from unittest.mock import AsyncMock, patch
 
@@ -55,6 +57,10 @@ async def test_pulse_runs_rocotorun(mock_rocoto_files):
 
             # Press 'R' for run (rocotorun)
             await pilot.press("R")
+            await pilot.pause(0.1)
+            # Confirm the dialog
+            await pilot.click("#confirm_yes")
+
             for _ in range(50):
                 if not app.workers:
                     break
@@ -92,6 +98,10 @@ async def test_refresh_runs_rocotorun(mock_rocoto_files):
 
             # Press 'R' for run (rocotorun) — matches rocoto_viewer's <R> key
             await pilot.press("R")
+            await pilot.pause(0.1)
+            # Confirm the dialog
+            await pilot.click("#confirm_yes")
+
             for _ in range(50):
                 if not app.workers:
                     break

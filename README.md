@@ -11,8 +11,12 @@ RocotoTop is a powerful Textual-based Terminal User Interface (TUI) for monitori
 ## Features
 
 - **Real-time Monitoring**: View the status of your Rocoto tasks and cycles in a hierarchical tree view.
+- **Global Dashboard**: At-a-glance summary of all task states and overall workflow progress.
+- **Split-Pane View**: Simultaneously view task details and live tailing logs.
 - **Log Tailing**: View and follow task logs in real-time within the TUI.
 - **Workflow Inspection**: Quickly see task states, exit statuses, and durations.
+- **Safety First**: Confirmation modals for destructive actions (Run, Rewind) to prevent accidents.
+- **Context Menus**: Discover available actions easily with an interactive context menu.
 - **Modern TUI**: Built with [Textual](https://textual.textualize.io/) for a smooth and responsive terminal experience.
 - **Easy Integration**: Simple command-line interface for specifying workflows and databases.
 
@@ -60,8 +64,9 @@ Key bindings are compatible with [NOAA rocoto_viewer.py](https://github.com/NOAA
 | `x` | Expand/collapse metatask |
 | `l` | Reload status data |
 | `F` | Find last running cycle |
-| `t` | Toggle Details/Log tabs |
+| `t` | Toggle Details/Log focus |
 | `f` | Toggle Log Follow mode |
+| `m` | Context Menu |
 | `h` | Help |
 | `/` | Search log (vi-style) |
 | `n`/`N` | Next/Previous search match |

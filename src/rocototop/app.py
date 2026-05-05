@@ -25,20 +25,125 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import (
+    Button,
     DataTable,
     Footer,
     Header,
     Input,
+    OptionList,
+    ProgressBar,
     RichLog,
     Static,
-    TabbedContent,
-    TabPane,
     Tree,
 )
 
 from rocototop.parser import CycleStatus, RocotoParser, TaskStatus
 
 logger = logging.getLogger(__name__)
+
+
+class ConfirmScreen(ModalScreen[bool]):
+    """A modal screen for confirmation."""
+
+    def __init__(self, message: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.message = message
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static(self.message, id="confirm_message"),
+            Horizontal(
+                Button("Yes", variant="primary", id="confirm_yes"),
+                Button("No", variant="error", id="confirm_no"),
+            ),
+            id="confirm_dialog",
+        )
+
+    @on(Button.Pressed, "#confirm_yes")
+    def on_yes(self) -> None:
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#confirm_no")
+    def on_no(self) -> None:
+        self.dismiss(False)
+
+
+class GlobalSummary(Static):
+    """A widget for displaying a global summary of the workflow."""
+
+    def compose(self) -> ComposeResult:
+        with Horizontal(id="summary_stats"):
+            yield Static("Workflow Summary: ", id="summary_label")
+            yield Static("", id="summary_counts")
+        yield ProgressBar(id="summary_progress", total=100, show_percentage=True)
+
+    def update_summary(self, summary: dict[str, int]) -> None:
+        """Update the summary display."""
+        parts = []
+        states = [
+            ("SUCCEEDED", "S", "green"),
+            ("RUNNING", "R", "yellow"),
+            ("FAILED", "F", "red"),
+            ("DEAD", "D", "red"),
+            ("QUEUED", "Q", "blue"),
+            ("WAITING", "W", "white"),
+        ]
+
+        total_tasks = sum(summary.values())
+        succeeded_tasks = summary.get("SUCCEEDED", 0)
+
+        for state, short, color in states:
+            count = summary.get(state, 0)
+            if count > 0:
+                parts.append(f"[{color}]{short}:{count}[/{color}]")
+
+        summary_str = " | ".join(parts) if parts else "No tasks"
+        self.query_one("#summary_counts", Static).update(summary_str)
+
+        if total_tasks > 0:
+            progress = self.query_one("#summary_progress", ProgressBar)
+            progress.total = total_tasks
+            progress.progress = succeeded_tasks
+
+
+class ActionMenu(ModalScreen[str]):
+    """A modal screen that displays a context menu of actions."""
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static("Actions", id="menu_title"),
+            OptionList(
+                "Check Task (c)",
+                "Boot Task (b)",
+                "Rewind Task (r)",
+                "Mark Task Complete (C)",
+                "Rewind Entire Cycle (W)",
+                "Run Workflow (R)",
+                id="menu_options",
+            ),
+            Static("Press ESC to close", id="menu_footer"),
+            id="menu_dialog",
+        )
+
+    @on(OptionList.OptionSelected, "#menu_options")
+    def on_selected(self, event: OptionList.OptionSelected) -> None:
+        # Use prompt for mapping if no ID
+        # Strip potential markup from prompt
+        prompt = Text.from_markup(str(event.option.prompt)).plain
+        mapping = {
+            "Check Task (c)": "check",
+            "Boot Task (b)": "boot",
+            "Rewind Task (r)": "rewind",
+            "Mark Task Complete (C)": "complete",
+            "Rewind Entire Cycle (W)": "rewind_cycle",
+            "Run Workflow (R)": "run",
+        }
+        self.dismiss(mapping.get(prompt))
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close"),
+        Binding("q", "dismiss", "Close"),
+    ]
 
 
 class HelpScreen(ModalScreen):
@@ -81,8 +186,9 @@ class HelpScreen(ModalScreen):
             ("X", "Collapse All Cycles"),
             ("g", "Jump to Top of Tree"),
             ("G", "Jump to Bottom of Tree"),
-            ("t", "Toggle Details/Log Tabs"),
+            ("t", "Toggle Details/Log Focus"),
             ("f", "Toggle Log Follow Mode"),
+            ("m", "Context Menu"),
             ("/", "Search/Filter (vi-style)"),
             ("n/N", "Next/Prev Search Match"),
             ("h", "Show this Help"),
@@ -172,11 +278,89 @@ class RocotoApp(App[None]):
         Binding("escape", "close_log_search", "Close Search", show=False, priority=True),
         Binding("g", "top", "Top", show=False),
         Binding("G", "bottom", "Bottom", show=False),
+        Binding("m", "open_menu", "Menu", show=True),
     ]
 
     CSS = f"""
     Screen {{
         background: $surface;
+    }}
+
+    #menu_dialog {{
+        padding: 1 2;
+        background: $surface;
+        border: thick $primary;
+        width: 40;
+        height: auto;
+        align: center middle;
+    }}
+
+    #menu_title {{
+        content-align: center middle;
+        text-style: bold;
+        background: $primary;
+        color: $text;
+        margin-bottom: 1;
+    }}
+
+    #menu_options {{
+        height: auto;
+        max-height: 20;
+    }}
+
+    #menu_footer {{
+        content-align: center middle;
+        text-style: italic;
+        margin-top: 1;
+    }}
+
+    GlobalSummary {{
+        height: auto;
+        border: solid $primary;
+        margin: 1;
+        padding: 0 1;
+        background: $boost;
+    }}
+
+    #summary_stats {{
+        height: 1;
+    }}
+
+    #summary_label {{
+        width: auto;
+        text-style: bold;
+    }}
+
+    #summary_counts {{
+        width: 1fr;
+    }}
+
+    #summary_progress {{
+        margin-top: 0;
+        margin-bottom: 0;
+    }}
+
+    #confirm_dialog {{
+        padding: 1 2;
+        background: $surface;
+        border: thick $primary;
+        width: 40;
+        height: auto;
+        align: center middle;
+    }}
+
+    #confirm_message {{
+        content-align: center middle;
+        margin-bottom: 1;
+    }}
+
+    #confirm_dialog Horizontal {{
+        align: center middle;
+        height: auto;
+    }}
+
+    #confirm_yes, #confirm_no {{
+        margin: 0 1;
     }}
 
     #sidebar {{
@@ -199,14 +383,28 @@ class RocotoApp(App[None]):
         border-bottom: solid $primary;
     }}
 
-    TabbedContent {{
+    #split_pane {{
         height: 85%;
     }}
 
     #details_panel {{
+        height: 40%;
         padding: 1;
         background: $surface;
         overflow-y: scroll;
+        border-bottom: solid $primary;
+    }}
+
+    #details_panel:focus {{
+        border: double $accent;
+    }}
+
+    #log_panel:focus {{
+        border: double $accent;
+    }}
+
+    #log_container {{
+        height: 60%;
     }}
 
     #log_panel {{
@@ -319,11 +517,13 @@ class RocotoApp(App[None]):
                 yield Tree("Cycles", id="cycle_tree")
             with Vertical(id="main_content"):
                 yield Input(placeholder="Filter tasks by name...", id="filter_input")
+                yield GlobalSummary()
                 yield DataTable(id="selected_task_status", cursor_type="row")
-                with TabbedContent():
-                    with TabPane("Details", id="details_tab"):
-                        yield Static("Select a task to see details", id="details_panel")
-                    with TabPane("Log", id="log_tab"):
+                with Vertical(id="split_pane"):
+                    details_panel = Static("Select a task to see details", id="details_panel")
+                    details_panel.can_focus = True
+                    yield details_panel
+                    with Vertical(id="log_container"):
                         yield RichLog(id="log_panel", highlight=True, markup=False)
                         with Horizontal(id="log_search_bar"):
                             yield Input(placeholder="/search...", id="log_search_input")
@@ -367,7 +567,15 @@ class RocotoApp(App[None]):
 
         Triggered by the 'R' key. Matches rocoto_viewer's <R> behavior.
         """
-        self._background_refresh(run_pulse=True)
+
+        def check_confirm(confirmed: bool | None) -> None:
+            if confirmed:
+                self._background_refresh(run_pulse=True)
+
+        self.push_screen(
+            ConfirmScreen("Are you sure you want to run the workflow (rocotorun)?"),
+            check_confirm,
+        )
 
     @work(exclusive=True)
     async def _background_refresh(self, run_pulse: bool = False) -> None:
@@ -479,6 +687,10 @@ class RocotoApp(App[None]):
         None
         """
         self._update_status_bar()
+        try:
+            self.query_one(GlobalSummary).update_summary(summary)
+        except Exception:
+            pass
 
     def watch_all_data(self, data: list[CycleStatus]) -> None:
         """
@@ -1307,6 +1519,30 @@ class RocotoApp(App[None]):
         """
         self.push_screen(HelpScreen())
 
+    def action_open_menu(self) -> None:
+        """
+        Open the context menu of actions.
+
+        Triggered by the 'm' key.
+        """
+
+        def handle_menu_selection(action: str | None) -> None:
+            if action:
+                # Map action IDs back to app action methods
+                action_map = {
+                    "check": self.action_check,
+                    "boot": self.action_boot,
+                    "rewind": self.action_rewind,
+                    "complete": self.action_complete,
+                    "rewind_cycle": self.action_rewind_cycle,
+                    "run": self.action_run,
+                }
+                func = action_map.get(action)
+                if func:
+                    func()
+
+        self.push_screen(ActionMenu(), handle_menu_selection)
+
     def action_rewind_cycle(self) -> None:
         """
         Execute rocotorewind for every task in the selected cycle.
@@ -1328,7 +1564,14 @@ class RocotoApp(App[None]):
             self.notify("No tasks found in selected cycle", severity="warning")
             return
 
-        self._rewind_cycle_tasks(self.last_selected_cycle, tasks)
+        def check_confirm(confirmed: bool | None) -> None:
+            if confirmed:
+                self._rewind_cycle_tasks(self.last_selected_cycle, tasks)
+
+        self.push_screen(
+            ConfirmScreen(f"Are you sure you want to rewind entire cycle {self.last_selected_cycle}?"),
+            check_confirm,
+        )
 
     @work
     async def _rewind_cycle_tasks(self, cycle: str, tasks: list[str]) -> None:
@@ -1440,17 +1683,18 @@ class RocotoApp(App[None]):
 
     def action_toggle_log(self) -> None:
         """
-        Toggle between Details and Log tabs.
+        Toggle between Details and Log focus.
 
         Returns
         -------
         None
         """
-        tabbed_content = self.query_one(TabbedContent)
-        if tabbed_content.active == "log_tab":
-            tabbed_content.active = "details_tab"
+        log_panel = self.query_one("#log_panel")
+        details_panel = self.query_one("#details_panel")
+        if self.focused == log_panel:
+            details_panel.focus()
         else:
-            tabbed_content.active = "log_tab"
+            log_panel.focus()
 
     def action_toggle_follow(self) -> None:
         """
@@ -1465,13 +1709,12 @@ class RocotoApp(App[None]):
 
     def action_open_search(self) -> None:
         """
-        Open search based on active tab (vi-style /).
+        Open search based on active focus (vi-style /).
 
-        If in Log tab, opens log search.
+        If log has focus or search was already open, opens log search.
         Otherwise, focuses the task filter input.
         """
-        tabbed_content = self.query_one(TabbedContent)
-        if tabbed_content.active == "log_tab":
+        if self.focused == self.query_one("#log_panel") or self.focused == self.query_one("#log_search_input"):
             bar = self.query_one("#log_search_bar")
             bar.add_class("visible")
             search_input = self.query_one("#log_search_input", Input)
