@@ -1,7 +1,10 @@
-import pytest
 import sys
 from unittest.mock import patch
+
+import pytest
+
 from rocototop.cli import main
+
 
 def test_cli_missing_workflow(tmp_path, capsys):
     db_file = tmp_path / "test.db"
@@ -15,6 +18,7 @@ def test_cli_missing_workflow(tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert "Error: Workflow file not found" in captured.out
+
 
 def test_cli_missing_database(tmp_path, capsys):
     wf_file = tmp_path / "test.xml"

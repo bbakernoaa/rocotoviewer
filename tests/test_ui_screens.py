@@ -1,6 +1,8 @@
 import pytest
-from rocototop.app import RocotoApp, HelpScreen, ActionMenu
-from textual.widgets import Tree, Static, OptionList
+from textual.widgets import OptionList, Tree
+
+from rocototop.app import ActionMenu, HelpScreen, RocotoApp
+
 
 @pytest.mark.asyncio
 async def test_help_screen(mock_rocoto_files):
@@ -29,6 +31,7 @@ async def test_help_screen(mock_rocoto_files):
         await pilot.pause(0.1)
         # Verify it returned to the main screen
         assert not isinstance(app.screen, HelpScreen)
+
 
 @pytest.mark.asyncio
 async def test_action_menu(mock_rocoto_files):

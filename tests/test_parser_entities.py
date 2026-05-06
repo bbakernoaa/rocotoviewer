@@ -1,7 +1,8 @@
-import pytest
-import os
 import logging
+import os
+
 from rocototop.parser import RocotoParser
+
 
 def test_parser_missing_system_entity(tmp_path, caplog):
     wf_file = tmp_path / "workflow.xml"
@@ -25,6 +26,7 @@ def test_parser_missing_system_entity(tmp_path, caplog):
     assert "SYSTEM entity file not found" in caplog.text
     assert "missing" in entities
     assert entities["missing"] == ""
+
 
 def test_parser_unreadable_system_entity(tmp_path, caplog):
     wf_file = tmp_path / "workflow.xml"
