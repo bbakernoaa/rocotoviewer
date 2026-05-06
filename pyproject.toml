@@ -27,6 +27,8 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-asyncio",
+    "pytest-cov",
+    "hypothesis",
     "pip-tools",
     "setuptools-scm",
 ]
