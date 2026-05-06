@@ -154,3 +154,9 @@ cython_debug/
 
 # kiro
 .kiro/
+
+# Hypothesis
+.hypothesis/
+
+# Generated version file
+src/rocototop/_version.py
